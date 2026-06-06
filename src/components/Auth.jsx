@@ -41,7 +41,6 @@ export default function Auth({
             <div className="space-y-6">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  {/* ⭐ 이름 대신 이메일을 입력하도록 변경됨 */}
                   <label className="block text-xs font-bold text-stone-700 mb-1.5 ml-1">이메일 계정</label>
                   <input 
                     type="text" 
@@ -99,7 +98,6 @@ export default function Auth({
                   <input type="text" required placeholder="010-0000-0000" value={signupForm.phone} onChange={e => setSignupForm({...signupForm, phone: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-stone-800" />
                 </div>
                 <div className="col-span-2">
-                  {/* ⭐ 이메일 입력을 필수로 변경 */}
                   <label className="block text-xs font-bold text-stone-700 mb-1">이메일 (로그인 시 사용)</label>
                   <input type="email" required placeholder="user@church.com" value={signupForm.email} onChange={e => setSignupForm({...signupForm, email: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-stone-800" />
                 </div>
@@ -155,7 +153,6 @@ export default function Auth({
                   <label className="block text-xs font-bold text-stone-700 mb-1">부서 이름</label>
                   <input type="text" required placeholder="예: 청소년부, 고등부" value={createChurchForm.deptName} onChange={e => setCreateChurchForm({...createChurchForm, deptName: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-stone-800" />
                 </div>
-                {/* ⭐ 담당 사역자 입력란 추가 */}
                 <div className="col-span-2">
                   <label className="block text-xs font-bold text-stone-700 mb-1">담당 사역자</label>
                   <input type="text" placeholder="예: 김철수 목사" value={createChurchForm.pastorName || ''} onChange={e => setCreateChurchForm({...createChurchForm, pastorName: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-stone-800" />
@@ -180,18 +177,30 @@ export default function Auth({
                     <input type="text" placeholder="교회 이름 검색..." value={joinSearchQuery} onChange={e => setJoinSearchQuery(e.target.value)} className="w-full bg-stone-50 border border-stone-200 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-stone-800" />
                     <Search size={18} className="absolute left-3 top-3.5 text-stone-400" />
                   </div>
-                  <div className="space-y-2 max-h-60 overflow-y-auto border border-stone-100 rounded-xl bg-white p-2">
-                    {realChurches.filter(c => c.name.includes(joinSearchQuery)).map(church => (
-                      <div key={church.id} onClick={() => setSelectedChurchToJoin(church)} className="p-3 border border-stone-100 rounded-lg flex justify-between items-center cursor-pointer hover:bg-emerald-50 hover:border-emerald-200 transition-colors">
-                        <div>
-                          <p className="font-bold text-sm text-stone-800">{church.name}</p>
-                          <p className="text-[11px] text-stone-500 mt-0.5">{church.dept} • {church.address}</p>
+                  
+                  {/* ⭐ 검색어가 있을 때만 리스트가 나타나도록 조건 추가 */}
+                  {joinSearchQuery.trim().length > 0 && (
+                    <div className="space-y-2 max-h-60 overflow-y-auto border border-stone-100 rounded-xl bg-white p-2">
+                      {realChurches.filter(c => c.name.includes(joinSearchQuery)).map(church => (
+                        <div key={church.id} onClick={() => setSelectedChurchToJoin(church)} className="p-3 border border-stone-100 rounded-lg flex justify-between items-center cursor-pointer hover:bg-emerald-50 hover:border-emerald-200 transition-colors">
+                          <div>
+                            {/* 교회 이름과 부서명 */}
+                            <p className="font-bold text-sm text-stone-800">
+                              {church.name} <span className="text-emerald-600 text-[11px] ml-1">{church.dept}</span>
+                            </p>
+                            {/* ⭐ 담당 사역자 강조 표시 및 주소 */}
+                            <p className="text-[11px] text-stone-500 mt-0.5">
+                              <span className="font-bold text-stone-600">담당: {church.pastor_name || '미정'}</span> • {church.address || '주소 미입력'}
+                            </p>
+                          </div>
+                          <ChevronLeft size={16} className="rotate-180 text-stone-400" />
                         </div>
-                        <ChevronLeft size={16} className="rotate-180 text-stone-400" />
-                      </div>
-                    ))}
-                    {realChurches.length === 0 && <p className="text-xs text-stone-400 text-center py-4">등록된 교회가 없습니다.</p>}
-                  </div>
+                      ))}
+                      {realChurches.filter(c => c.name.includes(joinSearchQuery)).length === 0 && (
+                        <p className="text-xs text-stone-400 text-center py-4">검색된 교회가 없습니다.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <form onSubmit={handleJoinChurch} className="space-y-4 animate-in fade-in duration-300">

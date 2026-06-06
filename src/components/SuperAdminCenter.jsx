@@ -20,6 +20,7 @@ export default function SuperAdminCenter({ currentUser, setCurrentUser, showToas
       churchId: church.id, 
       churchName: church.name, 
       deptName: church.dept, 
+      pastorName: church.pastor_name, // ⭐ 최고관리자로 입장할 때 담당 사역자 정보도 유지
       address: church.address,
       originalRole: '담당목사' // 최고 관리자 권한 부여
     }));
@@ -32,16 +33,27 @@ export default function SuperAdminCenter({ currentUser, setCurrentUser, showToas
       <h2 className="text-lg font-bold text-stone-800 flex items-center"><Settings className="mr-2 text-rose-500" /> 최고 관리자 센터</h2>
       <div className="space-y-3">
         {churches.map(church => (
-          <div key={church.id} className="bg-white p-4 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center">
+          <div key={church.id} className="bg-white p-4 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center hover:border-rose-200 transition-colors">
             <div>
-              <p className="font-bold text-stone-800">{church.name}</p>
-              <p className="text-xs text-stone-500">{church.dept} | {church.address}</p>
+              {/* ⭐ 교회 이름과 부서명 */}
+              <p className="font-bold text-stone-800">
+                {church.name} <span className="text-sm font-normal text-stone-500 ml-1">({church.dept})</span>
+              </p>
+              {/* ⭐ 담당 사역자 강조 표시 및 주소 */}
+              <p className="text-[11px] text-stone-500 mt-1">
+                <span className="font-bold text-stone-600">담당: {church.pastor_name || '사역자 미정'}</span> • {church.address || '주소 미입력'}
+              </p>
             </div>
-            <button onClick={() => enterChurchAsAdmin(church)} className="bg-rose-500 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center hover:bg-rose-600 transition-colors">
+            <button onClick={() => enterChurchAsAdmin(church)} className="bg-rose-500 text-white text-xs font-bold px-3 py-2.5 rounded-lg flex items-center hover:bg-rose-600 transition-colors shadow-sm shrink-0 ml-2">
               입장 <ArrowRight size={14} className="ml-1" />
             </button>
           </div>
         ))}
+        {churches.length === 0 && (
+          <div className="text-center py-10 text-stone-400 text-sm bg-white rounded-xl border border-stone-100 border-dashed">
+            개설된 교회가 없습니다.
+          </div>
+        )}
       </div>
     </div>
   );
