@@ -4,12 +4,12 @@ export const MOCK_CHURCHES = [
 ];
 
 export const MOCK_STUDENTS = [
-  { id: 1, name: '김하온', grade: '중1', group: '1반', phone: '010-1111-2222', birth: '05-12', points: 150, prayer: '학교 생활 적응', school: '성남중', parentsName: '김부모', parentsPhone: '010-9999-1111', consecutiveAbsences: 0, gender: '남' },
-  { id: 2, name: '박사랑', grade: '중1', group: '1반', phone: '010-3333-4444', birth: '08-24', points: 120, prayer: '진로 고민', school: '분당중', parentsName: '박부모', parentsPhone: '010-9999-2222', consecutiveAbsences: 3, gender: '여' },
-  { id: 3, name: '이은혜', grade: '중2', group: '1반', phone: '010-5555-6666', birth: '11-05', points: 80, prayer: '건강 회복', school: '판교중', parentsName: '이부모', parentsPhone: '010-9999-3333', consecutiveAbsences: 1, gender: '여' },
-  { id: 4, name: '최요한', grade: '중3', group: '2반', phone: '010-7777-8888', birth: '01-15', points: 200, prayer: '고등학교 진학', school: '성남중', parentsName: '최부모', parentsPhone: '010-9999-4444', consecutiveAbsences: 0, gender: '남' },
-  { id: 5, name: '정믿음', grade: '고1', group: '2반', phone: '010-9999-0000', birth: '05-30', points: 50, prayer: '학업 스트레스', school: '분당고', parentsName: '정부모', parentsPhone: '010-9999-5555', consecutiveAbsences: 4, gender: '남' },
-  { id: 6, name: '강소망', grade: '고2', group: '신입반', phone: '010-1234-5678', birth: '06-10', points: 10, prayer: '교회 정착', school: '수내고', parentsName: '강부모', parentsPhone: '010-9999-6666', consecutiveAbsences: 0, gender: '여' },
+  { id: 1, name: '김하온', grade: '중1', group: '1반', phone: '010-1111-2222', birth: '2013-05-12', points: 150, prayer: '학교 생활 적응', school: '성남중', parentsName: '김부모', parentsPhone: '010-9999-1111', consecutiveAbsences: 0, gender: '남' },
+  { id: 2, name: '박사랑', grade: '중1', group: '1반', phone: '010-3333-4444', birth: '2013-08-24', points: 120, prayer: '진로 고민', school: '분당중', parentsName: '박부모', parentsPhone: '010-9999-2222', consecutiveAbsences: 3, gender: '여' },
+  { id: 3, name: '이은혜', grade: '중2', group: '1반', phone: '010-5555-6666', birth: '2012-11-05', points: 80, prayer: '건강 회복', school: '판교중', parentsName: '이부모', parentsPhone: '010-9999-3333', consecutiveAbsences: 1, gender: '여' },
+  { id: 4, name: '최요한', grade: '중3', group: '2반', phone: '010-7777-8888', birth: '2011-01-15', points: 200, prayer: '고등학교 진학', school: '성남중', parentsName: '최부모', parentsPhone: '010-9999-4444', consecutiveAbsences: 0, gender: '남' },
+  { id: 5, name: '정믿음', grade: '고1', group: '2반', phone: '010-9999-0000', birth: '2010-05-30', points: 50, prayer: '학업 스트레스', school: '분당고', parentsName: '정부모', parentsPhone: '010-9999-5555', consecutiveAbsences: 4, gender: '남' },
+  { id: 6, name: '강소망', grade: '고2', group: '신입반', phone: '010-1234-5678', birth: '2009-06-10', points: 10, prayer: '교회 정착', school: '수내고', parentsName: '강부모', parentsPhone: '010-9999-6666', consecutiveAbsences: 0, gender: '여' },
 ];
 
 export const MOCK_ATTENDANCE = {
@@ -21,10 +21,10 @@ export const MOCK_LOGS = [
 ];
 
 export const MOCK_TEACHERS = [
-  { id: 1, name: '김선생', group: '1반', phone: '010-1111-2222', role: '교사', birth: '06-05' },
-  { id: 2, name: '이선생', group: '2반', phone: '010-2222-3333', role: '교사', birth: '03-15' },
-  { id: 3, name: '박신임', group: '신입반', phone: '010-4444-5555', role: '교사', birth: '10-20' },
-  { id: 4, name: '최부장', group: '전체', phone: '010-9999-9999', role: '부장', birth: '01-01' },
+  { id: 1, name: '김선생', group: '1반', phone: '010-1111-2222', role: '교사', birth: '1990-06-05' },
+  { id: 2, name: '이선생', group: '2반', phone: '010-2222-3333', role: '교사', birth: '1985-03-15' },
+  { id: 3, name: '박신임', group: '신입반', phone: '010-4444-5555', role: '교사', birth: '1998-10-20' },
+  { id: 4, name: '최부장', group: '전체', phone: '010-9999-9999', role: '부장', birth: '1975-01-01' },
 ];
 
 export const MOCK_STATS_WEEKLY = [

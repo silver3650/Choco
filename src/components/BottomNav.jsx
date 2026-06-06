@@ -3,7 +3,7 @@ import { Home, CheckSquare, Users, MessageCircle, Settings } from 'lucide-react'
 
 export default function BottomNav({ currentTab, setCurrentTab, userRole }) {
   return (
-    <nav className="fixed bottom-0 w-full max-w-md bg-white border-t border-stone-200 flex justify-around items-center h-[60px] pb-safe z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.03)]">
+    <nav className="fixed bottom-0 w-full max-w-md bg-white border-t border-stone-200 flex justify-around items-center h-15 pb-safe z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.03)]">
       <button onClick={() => setCurrentTab('dashboard')} className={`flex flex-col items-center justify-center w-full h-full transition-colors duration-200 ${currentTab === 'dashboard' ? 'text-emerald-500' : 'text-stone-400 hover:text-stone-600'}`}>
         <Home size={22} className={currentTab === 'dashboard' ? 'fill-current' : ''} />
         <span className="text-[10px] mt-1 font-bold">홈</span>
