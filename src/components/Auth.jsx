@@ -22,7 +22,7 @@ export default function Auth({
     <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4 font-sans">
       <div className="bg-[#FFFCF9] w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-300 flex flex-col max-h-[90vh]">
         
-        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-8 text-center text-white relative shrink-0">
+        <div className="bg-linear-to-r from-emerald-500 to-teal-500 p-8 text-center text-white relative shrink-0">
           {authMode !== 'login' && authMode !== 'pending' && (
             <button onClick={() => {
               if (authMode === 'signup') setAuthMode('login');
