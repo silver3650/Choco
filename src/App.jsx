@@ -17,6 +17,14 @@ import AdminCenter from './components/AdminCenter';
 import SuperAdminCenter from './components/SuperAdminCenter';
 
 export default function App() {
+  // ⭐ [핵심 수정] 한국 시간(로컬 기기 시간) 기준으로 완벽하게 날짜를 뽑아내는 헬퍼 함수
+  const getLocalYYYYMMDD = (d = new Date()) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [communityTab, setCommunityTab] = useState('notice');
   const [students, setStudents] = useState([]);
@@ -24,8 +32,8 @@ export default function App() {
   const [sundayAttendance, setSundayAttendance] = useState({});
   const [sundayDate, setSundayDate] = useState('');
   
-  // ⭐ 출석체크 탭에서 선택한 날짜 상태 (기본값: 오늘)
-  const [selectedAttDate, setSelectedAttDate] = useState(new Date().toISOString().split('T')[0]);
+  // ⭐ UTC 오류 해결: 로컬 시간 적용
+  const [selectedAttDate, setSelectedAttDate] = useState(getLocalYYYYMMDD());
   
   const [logs, setLogs] = useState([]);
   const [teachers, setTeachers] = useState([]);
@@ -43,12 +51,14 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null); 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [signupForm, setSignupForm] = useState({ name: '', phone: '', email: '', password: '', birth: '' });
-  const [createChurchForm, setCreateChurchForm] = useState({ churchName: '', deptName: '', address: '' });
+  const [createChurchForm, setCreateChurchForm] = useState({ churchName: '', deptName: '', pastorName: '', address: '' });
   const [joinSearchQuery, setJoinSearchQuery] = useState('');
   const [selectedChurchToJoin, setSelectedChurchToJoin] = useState(null);
 
+  // ⭐ UTC 오류 해결: 로컬 시간 적용
   const [quickLogModal, setQuickLogModal] = useState({ isOpen: false, student: null });
-  const [quickLogForm, setQuickLogForm] = useState({ text: '', method: '대면', date: new Date().toISOString().split('T')[0] });
+  const [quickLogForm, setQuickLogForm] = useState({ text: '', method: '대면', date: getLocalYYYYMMDD() });
+  
   const [editStudentModal, setEditStudentModal] = useState({ isOpen: false, student: null, isNew: false });
   const [postModal, setPostModal] = useState({ isOpen: false, post: null });
   const [editDutyModal, setEditDutyModal] = useState({ isOpen: false, duty: null });
@@ -86,7 +96,6 @@ export default function App() {
     }
   }, [isAuthenticated, currentUser?.churchId]); 
 
-  // ⭐ 특정 날짜의 출석 데이터만 불러오는 함수
   const fetchAttendanceByDate = async (dateStr) => {
     const { data: attData } = await supabase.from('attendance').select('*').eq('attendance_date', dateStr);
     const attObj = {};
@@ -134,11 +143,14 @@ export default function App() {
 
     await fetchAttendanceByDate(selectedAttDate);
 
+    // ⭐ UTC 오류 해결: 로컬 시간(한국 시간)을 기준으로 정확한 주일 계산
     const today = new Date();
     const dayOfWeek = today.getDay(); 
     const lastSunday = new Date(today);
     lastSunday.setDate(today.getDate() - dayOfWeek);
-    const lastSundayStr = lastSunday.toISOString().split('T')[0];
+    
+    // .toISOString()을 쓰지 않고 직접 만든 getLocalYYYYMMDD 사용!
+    const lastSundayStr = getLocalYYYYMMDD(lastSunday);
 
     const { data: sundayAttData } = await supabase.from('attendance').select('*').eq('attendance_date', lastSundayStr);
     if (sundayAttData) {
@@ -292,6 +304,7 @@ export default function App() {
     handleConfirm("로그아웃 하시겠습니까?", () => { setIsAuthenticated(false); setCurrentUser(null); setUserRole(''); setAuthMode('login'); setCurrentTab('dashboard'); setLoginForm({ email: '', password: '' }); setStudents([]); setTeachers([]); setPosts([]); setDuties([]); setLogs([]); setAttendance({}); setSundayAttendance({}); });
   };
 
+  // ⭐ 실시간 대시보드 반영을 관장하는 출석체크 함수 (시간 오류가 해결되어 이제 완벽하게 작동합니다)
   const handleAttendance = async (id, status) => {
     setAttendance(prev => ({ ...prev, [id]: status }));
     
@@ -331,7 +344,7 @@ export default function App() {
         phone: editStudentModal.student.phone, 
         parents_name: editStudentModal.student.parentsName, 
         parents_phone: editStudentModal.student.parentsPhone, 
-        prayer_requests: editStudentModal.student.prayer, // ⭐ 특이사항 DB 연동
+        prayer_requests: editStudentModal.student.prayer,
         gender: editStudentModal.student.gender 
     };
     
@@ -375,7 +388,7 @@ export default function App() {
   };
 
   const navigateToProfile = (student) => { setSelectedStudent(student); setCurrentTab('profile'); };
-  const openQuickLog = (student) => { setQuickLogModal({ isOpen: true, student }); setQuickLogForm({ text: '', method: '대면', date: new Date().toISOString().split('T')[0] }); };
+  const openQuickLog = (student) => { setQuickLogModal({ isOpen: true, student }); setQuickLogForm({ text: '', method: '대면', date: getLocalYYYYMMDD() }); }; // 여기도 로컬시간
   const closeQuickLog = () => setQuickLogModal({ isOpen: false, student: null });
   const openEditStudent = (student, isNew = false) => {
     if(isNew) setEditStudentModal({ isOpen: true, isNew: true, student: { id: Date.now(), name: '', birth: '', group: userRole === '교사' ? currentUser.group : '1반', grade: '', school: '', phone: '', parentsName: '', parentsPhone: '', prayer: '', points: 0, consecutiveAbsences: 0, gender: '남' } });
@@ -390,7 +403,7 @@ export default function App() {
     return (
       <>
         {toast.isOpen && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-99999 bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">
             {toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-rose-400" /> : <CheckCircle2 size={18} className="mr-2 text-emerald-400" />}
             <span className="text-sm font-bold">{toast.message}</span>
           </div>
@@ -404,7 +417,7 @@ export default function App() {
     <div className="min-h-screen bg-stone-100 font-sans flex justify-center">
       <div className="w-full max-w-md bg-stone-50 min-h-screen relative shadow-2xl flex flex-col overflow-hidden">
         
-        <header className="bg-linear-to-r from-emerald-500 to-teal-500 text-white p-4 sticky top-0 z-10 shadow-md">
+        <header className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-4 sticky top-0 z-10 shadow-md">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-3">
               {currentUser?.logo ? <img src={currentUser.logo} alt="logo" className="w-9 h-9 rounded-full bg-white object-cover border-2 border-emerald-200" /> : <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center border-2 border-white/40"><Church size={16} className="text-white drop-shadow-sm" /></div>}
@@ -452,7 +465,7 @@ export default function App() {
         </main>
 
         {myProfileModal.isOpen && (
-          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white"><h3 className="font-bold text-stone-800 flex items-center text-sm"><UserCircle size={18} className="mr-2 text-emerald-500" /> 내 프로필 설정</h3><button onClick={closeMyProfile} className="text-stone-400 hover:text-stone-600 bg-stone-100 rounded-full p-1 transition-colors"><X size={16} /></button></div>
               <div className="p-5 space-y-4">
@@ -469,10 +482,11 @@ export default function App() {
           </div>
         )}
 
-        {/* 각종 기능 모달 */}
-        {quickLogModal.isOpen && quickLogModal.student && (<div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4"><div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"><div className="flex justify-between items-center p-4 border-b border-stone-100"><h3 className="font-bold text-stone-800 flex items-center"><FileText size={18} className="mr-2 text-emerald-500" />{quickLogModal.student.name} <span className="text-sm text-stone-400 font-normal ml-1">심방 기록</span></h3><button onClick={closeQuickLog} className="text-stone-400"><X size={18} /></button></div><div className="p-4 space-y-3"><div className="flex space-x-2"><div className="flex-1"><label className="text-[10px] font-bold text-stone-500 mb-1">심방 일자</label><input type="date" value={quickLogForm.date} onChange={(e) => setQuickLogForm({...quickLogForm, date: e.target.value})} className="w-full font-bold text-stone-700 text-xs p-2 bg-stone-50 rounded-lg border border-stone-200" /></div><div className="flex-1"><label className="text-[10px] font-bold text-stone-500 mb-1">심방 방법</label><select value={quickLogForm.method} onChange={(e) => setQuickLogForm({...quickLogForm, method: e.target.value})} className="w-full font-bold text-stone-700 text-xs p-2 bg-stone-50 rounded-lg border border-stone-200"><option value="대면">대면</option><option value="전화">전화</option><option value="카톡/문자">카톡/문자</option><option value="기타">기타</option></select></div></div><div><label className="text-[10px] font-bold text-stone-500 mb-1">심방 내용</label><textarea value={quickLogForm.text} onChange={(e) => setQuickLogForm({...quickLogForm, text: e.target.value})} className="w-full text-sm p-3 bg-stone-50 rounded-xl border border-stone-200 h-24 resize-none" autoFocus /></div><div className="flex space-x-2 pt-2"><button onClick={closeQuickLog} className="flex-1 py-2.5 bg-stone-100 text-stone-600 text-sm font-bold rounded-xl">취소</button><button onClick={saveQuickLog} className="flex-1 py-2.5 bg-emerald-500 text-white text-sm font-bold rounded-xl">저장하기</button></div></div></div></div>)}
+        {/* 각종 기능 모달 (전부 fixed z-[9999] 적용) */}
+        {quickLogModal.isOpen && quickLogModal.student && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"><div className="flex justify-between items-center p-4 border-b border-stone-100"><h3 className="font-bold text-stone-800 flex items-center"><FileText size={18} className="mr-2 text-emerald-500" />{quickLogModal.student.name} <span className="text-sm text-stone-400 font-normal ml-1">심방 기록</span></h3><button onClick={closeQuickLog} className="text-stone-400"><X size={18} /></button></div><div className="p-4 space-y-3"><div className="flex space-x-2"><div className="flex-1"><label className="text-[10px] font-bold text-stone-500 mb-1">심방 일자</label><input type="date" value={quickLogForm.date} onChange={(e) => setQuickLogForm({...quickLogForm, date: e.target.value})} className="w-full font-bold text-stone-700 text-xs p-2 bg-stone-50 rounded-lg border border-stone-200" /></div><div className="flex-1"><label className="text-[10px] font-bold text-stone-500 mb-1">심방 방법</label><select value={quickLogForm.method} onChange={(e) => setQuickLogForm({...quickLogForm, method: e.target.value})} className="w-full font-bold text-stone-700 text-xs p-2 bg-stone-50 rounded-lg border border-stone-200"><option value="대면">대면</option><option value="전화">전화</option><option value="카톡/문자">카톡/문자</option><option value="기타">기타</option></select></div></div><div><label className="text-[10px] font-bold text-stone-500 mb-1">심방 내용</label><textarea value={quickLogForm.text} onChange={(e) => setQuickLogForm({...quickLogForm, text: e.target.value})} className="w-full text-sm p-3 bg-stone-50 rounded-xl border border-stone-200 h-24 resize-none" autoFocus /></div><div className="flex space-x-2 pt-2"><button onClick={closeQuickLog} className="flex-1 py-2.5 bg-stone-100 text-stone-600 text-sm font-bold rounded-xl">취소</button><button onClick={saveQuickLog} className="flex-1 py-2.5 bg-emerald-500 text-white text-sm font-bold rounded-xl">저장하기</button></div></div></div></div>)}
+        
         {postModal.isOpen && postModal.post && (
-          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white">
                 <span className={`text-[10px] font-bold px-2 py-1 rounded bg-emerald-100 text-emerald-600`}>{postModal.post.category || postModal.post.type === 'notice' ? '공지사항' : '자료실'}</span>
@@ -485,7 +499,6 @@ export default function App() {
                 </div>
                 <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{postModal.post.content}</p>
                 
-                {/* 첨부 이미지가 있으면 화면에 렌더링 */}
                 {postModal.post.image_url && (
                   <div className="mt-5">
                     <img src={postModal.post.image_url} alt="첨부 파일" className="w-full rounded-xl border border-stone-100 object-contain max-h-60" />
@@ -496,9 +509,8 @@ export default function App() {
           </div>
         )}
         
-        {/* ⭐ 학생 정보 수정 모달 (특이사항 및 기도제목 추가됨) */}
         {editStudentModal.isOpen && editStudentModal.student && (
-          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
               <div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white shrink-0">
                 <h3 className="font-bold text-stone-800 flex items-center text-lg">
@@ -540,8 +552,6 @@ export default function App() {
                     <label className="text-xs font-bold text-stone-600 mb-1 block">학생 연락처</label>
                     <input type="text" name="phone" value={editStudentModal.student.phone} onChange={handleEditChange} className="w-full bg-stone-50 border border-stone-200 rounded-lg p-2.5 text-sm outline-none focus:border-emerald-400 transition-colors" />
                   </div>
-                  
-                  {/* ⭐ 특이사항 및 기도제목 입력란 추가 */}
                   <div className="col-span-2 mt-2">
                     <label className="text-xs font-bold text-emerald-700 mb-1 flex items-center bg-emerald-50 py-1.5 px-2 rounded-t-lg border border-emerald-100 border-b-0">
                       <FileText size={14} className="mr-1.5" /> 특이사항 및 기도제목
@@ -566,15 +576,15 @@ export default function App() {
           </div>
         )}
         
-        {editDutyModal.isOpen && editDutyModal.duty && (<div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4"><div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"><div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white"><h3 className="font-bold text-stone-800 flex items-center text-sm"><Calendar size={18} className="mr-2 text-emerald-500" /> {editDutyModal.duty.date} 순서 변경</h3><button onClick={closeEditDuty} className="text-stone-400"><X size={16} /></button></div><div className="p-5 space-y-4"><div><label className="text-[11px] font-bold text-stone-500 mb-1">기도회 인도</label><select value={editDutyModal.duty.leader} onChange={(e) => setEditDutyModal(p => ({ isOpen: true, duty: { ...p.duty, leader: e.target.value } }))} className="w-full bg-stone-50 border border-stone-200 rounded-lg py-2.5 px-3 text-sm">{teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}</select></div></div><div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-end space-x-2"><button onClick={closeEditDuty} className="px-4 py-2 bg-white border border-stone-200 text-stone-600 text-xs font-bold rounded-lg">취소</button><button onClick={saveEditDuty} className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-lg">저장</button></div></div></div>)}
+        {editDutyModal.isOpen && editDutyModal.duty && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"><div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white"><h3 className="font-bold text-stone-800 flex items-center text-sm"><Calendar size={18} className="mr-2 text-emerald-500" /> {editDutyModal.duty.date} 순서 변경</h3><button onClick={closeEditDuty} className="text-stone-400"><X size={16} /></button></div><div className="p-5 space-y-4"><div><label className="text-[11px] font-bold text-stone-500 mb-1">기도회 인도</label><select value={editDutyModal.duty.leader} onChange={(e) => setEditDutyModal(p => ({ isOpen: true, duty: { ...p.duty, leader: e.target.value } }))} className="w-full bg-stone-50 border border-stone-200 rounded-lg py-2.5 px-3 text-sm">{teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}</select></div></div><div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-end space-x-2"><button onClick={closeEditDuty} className="px-4 py-2 bg-white border border-stone-200 text-stone-600 text-xs font-bold rounded-lg">취소</button><button onClick={saveEditDuty} className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-lg">저장</button></div></div></div>)}
 
-        {confirmDialog.isOpen && (<div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-xs text-center animate-in zoom-in-95 duration-200"><AlertCircle size={40} className="mx-auto text-emerald-500 mb-4" /><p className="text-stone-800 font-bold mb-6">{confirmDialog.message}</p><div className="flex space-x-3"><button onClick={closeConfirm} className="flex-1 bg-stone-100 py-3 rounded-xl font-bold">취소</button><button onClick={executeConfirm} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold">확인</button></div></div></div>)}
-        {toast.isOpen && (<div className="fixed top-4 left-1/2 -translate-x-1/2 z-99999 bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">{toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-rose-400" /> : <CheckCircle2 size={18} className="mr-2 text-emerald-400" />}<span className="text-sm font-bold">{toast.message}</span></div>)}
+        {confirmDialog.isOpen && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-xs text-center animate-in zoom-in-95 duration-200"><AlertCircle size={40} className="mx-auto text-emerald-500 mb-4" /><p className="text-stone-800 font-bold mb-6">{confirmDialog.message}</p><div className="flex space-x-3"><button onClick={closeConfirm} className="flex-1 bg-stone-100 py-3 rounded-xl font-bold">취소</button><button onClick={executeConfirm} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold">확인</button></div></div></div>)}
+        {toast.isOpen && (<div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">{toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-rose-400" /> : <CheckCircle2 size={18} className="mr-2 text-emerald-400" />}<span className="text-sm font-bold">{toast.message}</span></div>)}
 
         {showScrollTop && (
           <button 
             onClick={scrollToTop} 
-            className="fixed bottom-21.25 right-5 z-9999 bg-emerald-500 text-white w-12 h-12 rounded-full shadow-2xl border-2 border-white flex items-center justify-center animate-in zoom-in-90 fade-in duration-200 hover:bg-emerald-600 transition-colors"
+            className="fixed bottom-21.25 right-5 z-[9999] bg-emerald-500 text-white w-12 h-12 rounded-full shadow-2xl border-2 border-white flex items-center justify-center animate-in zoom-in-90 fade-in duration-200 hover:bg-emerald-600 transition-colors"
             title="맨 위로"
           >
             <span className="text-xl">🚀</span>
