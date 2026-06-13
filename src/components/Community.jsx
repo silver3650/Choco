@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { Edit, Image as ImageIcon, Calendar, Plus, X, Check, FileText, EyeOff, Eye, Pin, Trash2 } from 'lucide-react';
+import { Edit, Image as ImageIcon, Calendar, Plus, X, Check, FileText, EyeOff, Eye, Pin, Trash2, Heart } from 'lucide-react';
 import { supabase } from '../supabase';
 
-export default function Community({ userRole, currentUser, posts, setPosts, duties, setDuties, communityTab, setCommunityTab, showToast, setPostModal }) {
+// ⭐ students, setStudents 속성이 포함되어 있습니다.
+export default function Community({ userRole, currentUser, posts, setPosts, duties, setDuties, communityTab, setCommunityTab, showToast, setPostModal, students, setStudents }) {
   const [writeModal, setWriteModal] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', imageBase64: '' });
   const [editingPostId, setEditingPostId] = useState(null);
@@ -66,7 +67,6 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
     showToast(newHiddenStatus ? "게시글이 숨김 처리되었습니다." : "게시글이 다시 공개되었습니다.");
   };
 
-  // ⭐ 상단 고정 / 해제 토글 함수
   const handleTogglePin = async (e, post) => {
     e.stopPropagation();
     const newPinStatus = !post.is_pinned;
@@ -78,7 +78,6 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
     showToast(newPinStatus ? "게시글이 상단에 고정되었습니다." : "상단 고정이 해제되었습니다.");
   };
 
-  // ⭐ 삭제 함수
   const handleDeletePost = async (e, post) => {
     e.stopPropagation();
     if (!window.confirm("이 게시글을 완전히 삭제하시겠습니까? (복구 불가)")) return;
@@ -112,12 +111,11 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
       postData.author = currentUser.name;
       postData.post_date = new Date().toISOString().split('T')[0];
       postData.is_hidden = false;
-      postData.is_pinned = false; // 새 글은 기본적으로 고정 아님
+      postData.is_pinned = false;
 
       const { data, error } = await supabase.from('posts').insert([postData]).select().single();
       if (error) return showToast("게시글 작성에 실패했습니다.", "error");
       
-      // 최신 글이 배열의 맨 앞에 오도록 추가
       setPosts([{ ...data, type: data.post_type, hasFile: data.has_file, date: data.post_date }, ...posts]);
       showToast("게시글이 성공적으로 등록되었습니다.");
     }
@@ -156,15 +154,23 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
     setTimeout(() => window.location.reload(), 1000); 
   };
 
-  // ⭐ 최신순 및 상단 고정 정렬 반영
+  // ⭐ 기도했어요 버튼 동작 (카운트 1 증가)
+  const handlePrayed = async (student) => {
+    const newCount = (student.prayedCount || 0) + 1;
+    const { error } = await supabase.from('students').update({ prayed_count: newCount }).eq('id', student.id);
+    if (!error) {
+      setStudents(students.map(s => s.id === student.id ? { ...s, prayedCount: newCount } : s));
+      showToast(`${student.name} 학생을 위해 마음 모아 기도했습니다!`);
+    } else {
+      showToast("오류가 발생했습니다.", "error");
+    }
+  };
+
   const filteredPosts = posts
     .filter(p => p.type === communityTab && (isAdmin || !p.is_hidden))
     .sort((a, b) => {
-      // 1순위: 상단 고정(is_pinned) 여부
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
-      
-      // 2순위: 최신순 (id가 클수록 최신)
       return b.id - a.id;
     });
 
@@ -173,7 +179,7 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
       <div className="flex justify-between items-center mb-2">
         <h2 className="text-lg font-bold text-stone-800 flex items-center">커뮤니티</h2>
         
-        {isAdmin && communityTab !== 'duties' && (
+        {isAdmin && communityTab !== 'duties' && communityTab !== 'prayer' && (
           <button onClick={openWriteModal} className="bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center shadow-sm hover:bg-emerald-600">
             <Plus size={14} className="mr-1" /> 글쓰기
           </button>
@@ -194,9 +200,11 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
         <button onClick={() => setCommunityTab('notice')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${communityTab === 'notice' ? 'bg-white text-emerald-600 shadow-sm' : 'text-stone-500'}`}>공지사항</button>
         <button onClick={() => setCommunityTab('material')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${communityTab === 'material' ? 'bg-white text-emerald-600 shadow-sm' : 'text-stone-500'}`}>자료실</button>
         <button onClick={() => setCommunityTab('duties')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${communityTab === 'duties' ? 'bg-white text-emerald-600 shadow-sm' : 'text-stone-500'}`}>예배순서</button>
+        {/* ⭐ 새로운 기도나눔 탭 추가 */}
+        <button onClick={() => setCommunityTab('prayer')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${communityTab === 'prayer' ? 'bg-white text-emerald-600 shadow-sm' : 'text-stone-500'}`}>기도나눔</button>
       </div>
 
-      {communityTab !== 'duties' && (
+      {communityTab !== 'duties' && communityTab !== 'prayer' && (
         <div className="space-y-3 pb-20">
           {filteredPosts.length === 0 ? <p className="text-center text-stone-400 text-sm py-10">등록된 게시글이 없습니다.</p> : filteredPosts.map(post => (
             <div 
@@ -204,7 +212,6 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
               onClick={() => setPostModal({ isOpen: true, post })} 
               className={`bg-white p-4 rounded-2xl shadow-sm border cursor-pointer transition-colors relative ${post.is_hidden ? 'border-stone-200 bg-stone-50 opacity-70' : 'border-stone-100 hover:border-emerald-200'} ${post.is_pinned ? 'border-emerald-200 bg-emerald-50/30' : ''}`}
             >
-              {/* 뱃지 표시 영역 (고정 & 숨김) */}
               <div className="absolute top-3 right-3 flex space-x-1">
                 {post.is_pinned && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold flex items-center"><Pin size={10} className="mr-1"/>상단 고정됨</span>}
                 {post.is_hidden && <span className="text-[10px] bg-stone-200 text-stone-600 px-2 py-0.5 rounded font-bold flex items-center"><EyeOff size={10} className="mr-1"/>숨김 처리됨</span>}
@@ -218,7 +225,6 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
                 <span>{post.author}</span><span>{post.date}</span>
               </div>
               
-              {/* 관리자 전용 제어 버튼들 (상단 고정, 숨기기, 수정, 삭제) */}
               {isAdmin && (
                 <div className="mt-3 pt-3 border-t border-stone-100 flex flex-wrap justify-end gap-2">
                   <button onClick={(e) => handleTogglePin(e, post)} className="text-xs text-amber-600 hover:text-amber-700 px-2 py-1 rounded bg-amber-50 font-bold flex items-center transition-colors">
@@ -237,6 +243,47 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ⭐ 새로 추가된 '기도나눔' 내용 출력 영역 */}
+      {communityTab === 'prayer' && (
+        <div className="space-y-4 pb-20 animate-in fade-in duration-300">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
+            <h3 className="font-bold text-emerald-700 text-sm flex items-center justify-center mb-1"><Heart size={16} className="mr-1.5" /> 중보 기도 릴레이</h3>
+            <p className="text-[11px] text-emerald-600">학생 정보에 등록된 기도제목들이 모이는 곳입니다.<br/>함께 기도하며 사랑을 전해보세요.</p>
+          </div>
+
+          {students.filter(s => s.prayer && s.prayer.trim().length > 0).length === 0 ? (
+            <p className="text-center text-stone-400 text-sm py-10">등록된 기도제목이 없습니다.</p>
+          ) : (
+            students.filter(s => s.prayer && s.prayer.trim().length > 0).map(student => (
+              <div key={student.id} className="bg-white p-4 rounded-2xl shadow-sm border border-stone-100 hover:border-emerald-200 transition-colors">
+                <div className="flex items-center mb-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-base mr-3 ${student.gender === '여' ? 'bg-rose-50 text-rose-500' : 'bg-sky-50 text-sky-600'}`}>
+                    {student.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-stone-800 text-sm">{student.name} <span className="text-xs font-normal text-stone-400 ml-1">{student.group}</span></h3>
+                  </div>
+                </div>
+                <p className="text-sm text-stone-700 whitespace-pre-wrap bg-[#FFFCF9] p-3 rounded-xl border border-stone-100 leading-relaxed">
+                  {student.prayer}
+                </p>
+                <div className="mt-3 flex justify-end">
+                  <button 
+                    onClick={() => handlePrayed(student)} 
+                    className="flex items-center text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-100 transition-colors"
+                  >
+                    🙏 기도했어요 
+                    <span className="ml-1.5 bg-white text-emerald-500 px-2 py-0.5 rounded-full text-[10px] shadow-sm">
+                      {student.prayedCount || 0}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
 

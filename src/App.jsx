@@ -61,7 +61,6 @@ export default function App() {
   const [editDutyModal, setEditDutyModal] = useState({ isOpen: false, duty: null });
   const [myProfileModal, setMyProfileModal] = useState({ isOpen: false, name: '', phone: '', birth: '', email: '' });
 
-  // ⭐ 목양 기도 팝업 상태 추가
   const [prayerPopup, setPrayerPopup] = useState({ isOpen: false, student: null });
 
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
@@ -90,29 +89,22 @@ export default function App() {
     ? ['전체', currentUser.group]
     : uniqueGroups;
 
-  // ⭐ 골든타임 알림 계산 로직 (대시보드 노출용)
-  const ninetyDaysAgo = new Date();
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  // ⭐ [수정된 부분] 오늘 기준이 아닌 '이번 달' 기준으로 변경하고, 관리자 모드일 때는 전체 학생 명단에서 찾도록 수정했습니다!
+  const todayObj = new Date();
+  const currentMonthStr = String(todayObj.getMonth() + 1).padStart(2, '0');
+  
+  const targetStudents = userRole === '교사' ? visibleStudents : students;
 
-  const longAbsentees = visibleStudents.filter(s => s.consecutiveAbsences >= 3);
-  const needCareStudents = visibleStudents.filter(s => {
-    const studentLogs = logs?.filter(l => l.studentId === s.id) || [];
-    if (studentLogs.length === 0) return true; // 심방 기록이 아예 없는 학생도 대상
-    const latestLogDate = new Date(Math.max(...studentLogs.map(l => new Date(l.date))));
-    return latestLogDate < ninetyDaysAgo;
-  });
+  const monthBirthdays = targetStudents.filter(s => s.birth && s.birth.substring(5, 7) === currentMonthStr);
+  const eventStudents = targetStudents.filter(s => s.specialEvent && s.specialEvent.trim() !== '');
 
-  // ⭐ 매주 토요일 특정 요일 기도 팝업 로직
   useEffect(() => {
     if (isAuthenticated && visibleStudents.length > 0 && currentTab === 'dashboard') {
       const today = new Date();
-      // getDay() 6은 토요일을 의미합니다. (테스트용으로 요일을 바꾸셔도 됩니다)
       if (today.getDay() === 6) {
-        // 이미 이번 로그인 세션에서 팝업을 띄웠는지 체크
         if (!sessionStorage.getItem('prayerPopupShown')) {
           const studentsWithPrayer = visibleStudents.filter(s => s.prayer && s.prayer.trim() !== '');
           if (studentsWithPrayer.length > 0) {
-            // 기도제목이 있는 학생 중 한 명을 무작위로 추출
             const randomStudent = studentsWithPrayer[Math.floor(Math.random() * studentsWithPrayer.length)];
             setPrayerPopup({ isOpen: true, student: randomStudent });
             sessionStorage.setItem('prayerPopupShown', 'true');
@@ -149,7 +141,7 @@ export default function App() {
       supabase.from('visitation_logs').select('*')
     ]);
 
-    if (studentsData) setStudents(studentsData.map(s => ({ ...s, group: s.class_name, parentsName: s.parents_name, parentsPhone: s.parents_phone, consecutiveAbsences: s.consecutive_absences, prayer: s.prayer_requests, prayedCount: s.prayed_count || 0 })));
+    if (studentsData) setStudents(studentsData.map(s => ({ ...s, group: s.class_name, parentsName: s.parents_name, parentsPhone: s.parents_phone, consecutiveAbsences: s.consecutive_absences, prayer: s.prayer_requests, prayedCount: s.prayed_count || 0, specialEvent: s.special_event || '' })));
     if (postsData) setPosts(postsData.map(p => ({ ...p, type: p.post_type, hasFile: p.has_file, date: p.post_date })));
     if (dutiesData) setDuties(dutiesData.map(d => ({ ...d, month: d.duty_month, date: d.duty_date })));
     if (logsData) setLogs(logsData.map(l => ({ ...l, studentId: l.student_id, date: l.visit_date, teacher: l.teacher_name })));
@@ -374,15 +366,16 @@ export default function App() {
         parents_name: editStudentModal.student.parentsName, 
         parents_phone: editStudentModal.student.parentsPhone, 
         prayer_requests: editStudentModal.student.prayer,
-        gender: editStudentModal.student.gender 
+        gender: editStudentModal.student.gender,
+        special_event: editStudentModal.student.specialEvent 
     };
     
     if (editStudentModal.isNew) {
       const { data, error } = await supabase.from('students').insert([studentData]).select().single();
-      if (!error && data) { setStudents([...students, { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests, prayedCount: 0 }]); showToast('신규 학생이 등록되었습니다.'); }
+      if (!error && data) { setStudents([...students, { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests, prayedCount: 0, specialEvent: data.special_event || '' }]); showToast('신규 학생이 등록되었습니다.'); }
     } else {
-      const { data, error } = await supabase.from('students').update(studentData).eq('id', editStudentModal.student.id).select().single();
-      if (!error && data) { setStudents(students.map(s => s.id === data.id ? { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests } : s)); showToast('학생 정보가 업데이트되었습니다.'); }
+      const { data, error = null } = await supabase.from('students').update(studentData).eq('id', editStudentModal.student.id).select().single();
+      if (!error && data) { setStudents(students.map(s => s.id === data.id ? { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests, specialEvent: data.special_event || '' } : s)); showToast('학생 정보가 업데이트되었습니다.'); }
     }
     closeEditStudent();
   };
@@ -416,7 +409,7 @@ export default function App() {
 
   const saveEditDuty = async () => {
     const { data, error } = await supabase.from('duties').update({ leader: editDutyModal.duty.leader, prayer: editDutyModal.duty.prayer }).eq('id', editDutyModal.duty.id).select().single();
-    if (!error && data) { setDuties(duties.map(d => d.id === data.id ? { ...data, month: data.duty_month, date: data.duty_date } : d)); showToast('예배 순서가 업데이트되었습니다.'); }
+    if (!error && data) { setDuties(duties.map(d => d.id === data.id ? { ...data, month: data.duty_month, date: d.duty_date } : d)); showToast('예배 순서가 업데이트되었습니다.'); }
     closeEditDuty();
   };
 
@@ -449,7 +442,7 @@ export default function App() {
   const closeQuickLog = () => setQuickLogModal({ isOpen: false, student: null, existingLog: null });
   
   const openEditStudent = (student, isNew = false) => {
-    if(isNew) setEditStudentModal({ isOpen: true, isNew: true, student: { id: Date.now(), name: '', birth: '', group: userRole === '교사' ? currentUser.group : '1반', grade: '', school: '', phone: '', parentsName: '', parentsPhone: '', prayer: '', points: 0, consecutiveAbsences: 0, gender: '남' } });
+    if(isNew) setEditStudentModal({ isOpen: true, isNew: true, student: { id: Date.now(), name: '', birth: '', group: userRole === '교사' ? currentUser.group : '1반', grade: '', school: '', phone: '', parentsName: '', parentsPhone: '', prayer: '', points: 0, consecutiveAbsences: 0, gender: '남', specialEvent: '' } });
     else setEditStudentModal({ isOpen: true, isNew: false, student: { ...student } });
   };
   const closeEditStudent = () => setEditStudentModal({ isOpen: false, student: null, isNew: false });
@@ -521,55 +514,41 @@ export default function App() {
           </div>
         </header>
 
-        <main id="main-scroll-area" onScroll={handleMainScroll} className="flex-1 overflow-y-auto pb-20 scroll-smooth">
+        <div id="main-scroll-area" onScroll={handleMainScroll} className="flex-1 overflow-y-auto pb-20 scroll-smooth">
           
-          {/* ⭐ 대시보드 상단 목양 골든타임 알림 렌더링 영역 */}
-          {currentTab === 'dashboard' && (
+          {/* ⭐ 대시보드 진입 시 상단에 노출되는 생일 및 학교 특별일정 알림 카드 */}
+          {currentTab === 'dashboard' && (monthBirthdays.length > 0 || eventStudents.length > 0) && (
             <div className="p-4 pb-0 space-y-2">
-              {longAbsentees.length > 0 && (
-                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-start shadow-sm animate-in fade-in zoom-in duration-300">
-                   <AlertCircle size={16} className="text-rose-500 mr-2 mt-0.5 shrink-0" />
-                   <div>
-                      <h4 className="text-xs font-bold text-rose-700 mb-0.5">장기 결석 주의 (3주 이상)</h4>
-                      <p className="text-[10px] text-rose-600 leading-tight">
-                        <span className="font-bold">{longAbsentees.map(s => s.name).join(', ')}</span> 학생이 보이지 않습니다. 이번 주에 꼭 연락해 보세요!
-                      </p>
-                   </div>
-                </div>
-              )}
-              {needCareStudents.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start shadow-sm animate-in fade-in zoom-in duration-300">
-                   <AlertCircle size={16} className="text-amber-500 mr-2 mt-0.5 shrink-0" />
-                   <div>
-                      <h4 className="text-xs font-bold text-amber-700 mb-0.5">심방 골든타임 (90일 경과)</h4>
-                      <p className="text-[10px] text-amber-600 leading-tight">
-                        <span className="font-bold">{needCareStudents.length}명</span>의 학생과 깊은 대화를 나눈 지 오래되었습니다.
-                      </p>
-                   </div>
-                </div>
-              )}
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-3.5 flex items-start shadow-sm animate-in fade-in zoom-in duration-300">
+                 <span className="text-lg mr-2.5 mt-0.5 shrink-0">🎂</span>
+                 <div className="flex-1">
+                    <h4 className="text-xs font-bold text-purple-700 mb-1">{userRole === '교사' ? '우리 반' : '교회 학교 전체'} 삶의 자리 알림</h4>
+                    <div className="space-y-1.5 text-[11px] text-purple-600 leading-tight">
+                      {monthBirthdays.length > 0 && (
+                        <p>🎉 <span className="font-bold">이번 달({currentMonthStr}월) 생일:</span> {monthBirthdays.map(s => `${s.name}(${s.group})`).join(', ')}</p>
+                      )}
+                      {eventStudents.length > 0 && (
+                        <div className="space-y-0.5 mt-1">
+                          <span className="font-bold">📝 주요 일정 및 시험:</span>
+                          {eventStudents.map(s => (
+                            <p key={s.id} className="ml-2 mt-0.5">• {s.name}({s.group}): <span className="font-bold text-purple-800">{s.specialEvent}</span></p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                 </div>
+              </div>
             </div>
           )}
 
           {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={students} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} logs={logs} />}
-          
           {currentTab === 'attendance' && <Attendance userRole={userRole} currentUser={currentUser} students={visibleStudents} attendance={attendance} teachers={teachers} uniqueGroups={visibleGroups} handleAttendance={handleAttendance} handleAllPresent={handleAllPresent} showToast={showToast} selectedAttDate={selectedAttDate} setSelectedAttDate={setSelectedAttDate} fetchAttendanceByDate={fetchAttendanceByDate} />}
-          
           {currentTab === 'students' && <StudentList userRole={userRole} currentUser={currentUser} students={visibleStudents} studentSearch={studentSearch} setStudentSearch={setStudentSearch} openEditStudent={openEditStudent} navigateToProfile={navigateToProfile} logs={logs} />}
-          
           {currentTab === 'community' && <Community userRole={userRole} currentUser={currentUser} posts={posts} setPosts={setPosts} duties={duties} setDuties={setDuties} communityTab={communityTab} setCommunityTab={setCommunityTab} showToast={showToast} setPostModal={setPostModal} students={visibleStudents} setStudents={setStudents} />}
-          
           {currentTab === 'profile' && <Profile selectedStudent={selectedStudent} logs={logs} setLogs={setLogs} setCurrentTab={setCurrentTab} openEditStudent={openEditStudent} showToast={showToast} openQuickLog={openQuickLog} />}
           {currentTab === 'admin' && <AdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} students={students} setStudents={setStudents} teachers={teachers} setTeachers={setTeachers} pendingTeachers={pendingTeachers} setPendingTeachers={setPendingTeachers} uniqueGroups={uniqueGroups} showToast={showToast} />}
-          {currentTab === 'superadmin' && (
-            <SuperAdminCenter 
-              currentUser={currentUser} 
-              setCurrentUser={setCurrentUser} 
-              showToast={showToast} 
-              setCurrentTab={setCurrentTab} 
-            />
-          )}
-        </main>
+          {currentTab === 'superadmin' && <SuperAdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} showToast={showToast} setCurrentTab={setCurrentTab} />}
+        </div>
 
         {myProfileModal.isOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
@@ -695,6 +674,11 @@ export default function App() {
                   </div>
                   
                   <div className="col-span-2">
+                    <label className="text-xs font-bold text-stone-600 mb-1 block">기념일 및 주요 일정 (예: 6/15~18 기말고사, 학교 축제 등)</label>
+                    <input type="text" name="specialEvent" value={editStudentModal.student.specialEvent || ''} onChange={handleEditChange} placeholder="아이들의 소중한 세상 속 일정을 입력해 주세요." className="w-full bg-stone-50 border border-stone-200 rounded-lg p-2.5 text-sm outline-none focus:border-emerald-400 transition-colors" />
+                  </div>
+                  
+                  <div className="col-span-2">
                     <label className="text-xs font-bold text-stone-600 mb-1 block">학생 연락처</label>
                     <div className="flex items-center space-x-2">
                       <input type="text" name="phone" value={editStudentModal.student.phone} onChange={handleEditChange} className="flex-1 bg-stone-50 border border-stone-200 rounded-lg p-2.5 text-sm outline-none focus:border-emerald-400 transition-colors" />
@@ -732,7 +716,7 @@ export default function App() {
         {confirmDialog.isOpen && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-xs text-center animate-in zoom-in-95 duration-200"><AlertCircle size={40} className="mx-auto text-emerald-500 mb-4" /><p className="text-stone-800 font-bold mb-6">{confirmDialog.message}</p><div className="flex space-x-3"><button onClick={closeConfirm} className="flex-1 bg-stone-100 py-3 rounded-xl font-bold">취소</button><button onClick={executeConfirm} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold">확인</button></div></div></div>)}
         {toast.isOpen && (<div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">{toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-rose-400" /> : <CheckCircle2 size={18} className="mr-2 text-emerald-400" />}<span className="text-sm font-bold">{toast.message}</span></div>)}
 
-        {/* ⭐ 주말(토요일) 기도 팝업 모달 영역 */}
+        {/* 주말(토요일) 기도 팝업 모달 영역 */}
         {prayerPopup.isOpen && prayerPopup.student && (
           <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4">
             <div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm text-center animate-in zoom-in-95 duration-300">

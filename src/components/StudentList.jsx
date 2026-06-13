@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Search, UserPlus, ChevronRight, Phone, Filter, MessageCircle, FileText } from 'lucide-react';
+import { Search, UserPlus, ChevronRight, Phone, Filter, MessageCircle, FileText, AlertCircle } from 'lucide-react';
 
-// ⭐ logs 속성을 추가로 받도록 수정되었습니다.
 export default function StudentList({ userRole, currentUser, students, studentSearch, setStudentSearch, openEditStudent, navigateToProfile, logs }) {
   const [filterGroup, setFilterGroup] = useState('전체');
   const [filterGrade, setFilterGrade] = useState('전체');
@@ -33,7 +32,21 @@ export default function StudentList({ userRole, currentUser, students, studentSe
 
   filtered.sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'));
 
-  // ⭐ 전화 및 문자 연결 함수 추가
+  // ⭐ 목양 골든타임 알림 계산 로직 (90일 기준)
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+  // 3주 이상 결석자 필터링
+  const longAbsentees = filtered.filter(s => s.consecutiveAbsences >= 3);
+  
+  // 90일 이상 심방 기록이 없거나, 아예 기록이 없는 학생 필터링
+  const needCareStudents = filtered.filter(s => {
+    const studentLogs = logs?.filter(l => l.studentId === s.id) || [];
+    if (studentLogs.length === 0) return true; // 심방 기록이 아예 없는 학생도 대상
+    const latestLogDate = new Date(Math.max(...studentLogs.map(l => new Date(l.date))));
+    return latestLogDate < ninetyDaysAgo;
+  });
+
   const handleCall = (e, phone) => {
     e.stopPropagation();
     if (!phone) return alert("연락처 정보가 없습니다.");
@@ -53,6 +66,32 @@ export default function StudentList({ userRole, currentUser, students, studentSe
         <button onClick={() => openEditStudent(null, true)} className="flex items-center text-xs bg-emerald-500 text-white px-3 py-2 rounded-lg font-bold shadow-sm hover:bg-emerald-600 transition-colors">
           <UserPlus size={14} className="mr-1.5" /> 학생 등록
         </button>
+      </div>
+
+      {/* ⭐ 목양 골든타임 알림 배너 (결석, 심방) */}
+      <div className="space-y-2">
+        {longAbsentees.length > 0 && (
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-start shadow-sm animate-in fade-in zoom-in duration-300">
+             <AlertCircle size={16} className="text-rose-500 mr-2 mt-0.5 shrink-0" />
+             <div>
+                <h4 className="text-xs font-bold text-rose-700 mb-0.5">장기 결석 주의 (3주 이상)</h4>
+                <p className="text-[10px] text-rose-600 leading-tight">
+                  <span className="font-bold">{longAbsentees.map(s => s.name).join(', ')}</span> 학생이 보이지 않습니다. 이번 주에 꼭 연락해 보세요!
+                </p>
+             </div>
+          </div>
+        )}
+        {needCareStudents.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start shadow-sm animate-in fade-in zoom-in duration-300">
+             <AlertCircle size={16} className="text-amber-500 mr-2 mt-0.5 shrink-0" />
+             <div>
+                <h4 className="text-xs font-bold text-amber-700 mb-0.5">심방 골든타임 (90일 경과)</h4>
+                <p className="text-[10px] text-amber-600 leading-tight">
+                  <span className="font-bold">{needCareStudents.length}명</span>의 학생과 깊은 대화를 나눈 지 오래되었습니다.
+                </p>
+             </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -86,7 +125,6 @@ export default function StudentList({ userRole, currentUser, students, studentSe
 
       <div className="space-y-3 pt-2">
         {filtered.map(student => {
-          // ⭐ 특이사항이나 심방기록이 있는지 체크
           const hasSpecialNote = student.prayer && student.prayer.trim().length > 0;
           const hasLog = logs && logs.some(l => l.studentId === student.id);
           const showNewIcon = hasSpecialNote || hasLog;
@@ -100,7 +138,6 @@ export default function StudentList({ userRole, currentUser, students, studentSe
                 <div>
                   <h3 className="font-bold text-stone-800 text-base mb-0.5 flex items-center">
                     {student.name} <span className="text-xs font-normal text-stone-400 mx-1">{student.group}</span>
-                    {/* ⭐ 새글(N) 아이콘 표시 */}
                     {showNewIcon && (
                       <span className="flex items-center text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded-full font-bold shadow-sm">
                         <FileText size={8} className="mr-0.5" /> N
@@ -113,7 +150,6 @@ export default function StudentList({ userRole, currentUser, students, studentSe
               </div>
               
               <div className="flex items-center">
-                {/* ⭐ 리스트에서도 바로 전화/문자 할 수 있도록 퀵 액션 버튼 추가 */}
                 <div className="flex space-x-1.5 mr-3">
                   <button onClick={(e) => handleCall(e, student.phone)} className="p-1.5 bg-emerald-50 text-emerald-600 rounded-full hover:bg-emerald-100 transition-colors shadow-sm" title="전화걸기"><Phone size={14} /></button>
                   <button onClick={(e) => handleMessage(e, student.phone)} className="p-1.5 bg-amber-50 text-amber-600 rounded-full hover:bg-amber-100 transition-colors shadow-sm" title="문자보내기"><MessageCircle size={14} /></button>
