@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Church, LogOut, ChevronUp, AlertCircle, CheckCircle2, FileText, 
-  X, Calendar, ClipboardList, UserCircle, Save
+  X, Calendar, ClipboardList, UserCircle, Save, Phone, MessageCircle 
 } from 'lucide-react';
 
 import { supabase } from './supabase'; 
@@ -17,7 +17,6 @@ import AdminCenter from './components/AdminCenter';
 import SuperAdminCenter from './components/SuperAdminCenter';
 
 export default function App() {
-  // ⭐ [핵심 수정] 한국 시간(로컬 기기 시간) 기준으로 완벽하게 날짜를 뽑아내는 헬퍼 함수
   const getLocalYYYYMMDD = (d = new Date()) => {
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -32,7 +31,6 @@ export default function App() {
   const [sundayAttendance, setSundayAttendance] = useState({});
   const [sundayDate, setSundayDate] = useState('');
   
-  // ⭐ UTC 오류 해결: 로컬 시간 적용
   const [selectedAttDate, setSelectedAttDate] = useState(getLocalYYYYMMDD());
   
   const [logs, setLogs] = useState([]);
@@ -55,14 +53,16 @@ export default function App() {
   const [joinSearchQuery, setJoinSearchQuery] = useState('');
   const [selectedChurchToJoin, setSelectedChurchToJoin] = useState(null);
 
-  // ⭐ UTC 오류 해결: 로컬 시간 적용
-  const [quickLogModal, setQuickLogModal] = useState({ isOpen: false, student: null });
+  const [quickLogModal, setQuickLogModal] = useState({ isOpen: false, student: null, existingLog: null });
   const [quickLogForm, setQuickLogForm] = useState({ text: '', method: '대면', date: getLocalYYYYMMDD() });
   
   const [editStudentModal, setEditStudentModal] = useState({ isOpen: false, student: null, isNew: false });
   const [postModal, setPostModal] = useState({ isOpen: false, post: null });
   const [editDutyModal, setEditDutyModal] = useState({ isOpen: false, duty: null });
   const [myProfileModal, setMyProfileModal] = useState({ isOpen: false, name: '', phone: '', birth: '', email: '' });
+
+  // ⭐ 목양 기도 팝업 상태 추가
+  const [prayerPopup, setPrayerPopup] = useState({ isOpen: false, student: null });
 
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
@@ -89,6 +89,38 @@ export default function App() {
   const visibleGroups = (userRole === '교사' && currentUser?.group && currentUser.group !== '전체' && currentUser.group !== '총괄')
     ? ['전체', currentUser.group]
     : uniqueGroups;
+
+  // ⭐ 골든타임 알림 계산 로직 (대시보드 노출용)
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+  const longAbsentees = visibleStudents.filter(s => s.consecutiveAbsences >= 3);
+  const needCareStudents = visibleStudents.filter(s => {
+    const studentLogs = logs?.filter(l => l.studentId === s.id) || [];
+    if (studentLogs.length === 0) return true; // 심방 기록이 아예 없는 학생도 대상
+    const latestLogDate = new Date(Math.max(...studentLogs.map(l => new Date(l.date))));
+    return latestLogDate < ninetyDaysAgo;
+  });
+
+  // ⭐ 매주 토요일 특정 요일 기도 팝업 로직
+  useEffect(() => {
+    if (isAuthenticated && visibleStudents.length > 0 && currentTab === 'dashboard') {
+      const today = new Date();
+      // getDay() 6은 토요일을 의미합니다. (테스트용으로 요일을 바꾸셔도 됩니다)
+      if (today.getDay() === 6) {
+        // 이미 이번 로그인 세션에서 팝업을 띄웠는지 체크
+        if (!sessionStorage.getItem('prayerPopupShown')) {
+          const studentsWithPrayer = visibleStudents.filter(s => s.prayer && s.prayer.trim() !== '');
+          if (studentsWithPrayer.length > 0) {
+            // 기도제목이 있는 학생 중 한 명을 무작위로 추출
+            const randomStudent = studentsWithPrayer[Math.floor(Math.random() * studentsWithPrayer.length)];
+            setPrayerPopup({ isOpen: true, student: randomStudent });
+            sessionStorage.setItem('prayerPopupShown', 'true');
+          }
+        }
+      }
+    }
+  }, [isAuthenticated, visibleStudents.length, currentTab]);
 
   useEffect(() => {
     if (isAuthenticated && currentUser?.churchId) {
@@ -117,7 +149,7 @@ export default function App() {
       supabase.from('visitation_logs').select('*')
     ]);
 
-    if (studentsData) setStudents(studentsData.map(s => ({ ...s, group: s.class_name, parentsName: s.parents_name, parentsPhone: s.parents_phone, consecutiveAbsences: s.consecutive_absences, prayer: s.prayer_requests })));
+    if (studentsData) setStudents(studentsData.map(s => ({ ...s, group: s.class_name, parentsName: s.parents_name, parentsPhone: s.parents_phone, consecutiveAbsences: s.consecutive_absences, prayer: s.prayer_requests, prayedCount: s.prayed_count || 0 })));
     if (postsData) setPosts(postsData.map(p => ({ ...p, type: p.post_type, hasFile: p.has_file, date: p.post_date })));
     if (dutiesData) setDuties(dutiesData.map(d => ({ ...d, month: d.duty_month, date: d.duty_date })));
     if (logsData) setLogs(logsData.map(l => ({ ...l, studentId: l.student_id, date: l.visit_date, teacher: l.teacher_name })));
@@ -143,13 +175,11 @@ export default function App() {
 
     await fetchAttendanceByDate(selectedAttDate);
 
-    // ⭐ UTC 오류 해결: 로컬 시간(한국 시간)을 기준으로 정확한 주일 계산
     const today = new Date();
     const dayOfWeek = today.getDay(); 
     const lastSunday = new Date(today);
     lastSunday.setDate(today.getDate() - dayOfWeek);
     
-    // .toISOString()을 쓰지 않고 직접 만든 getLocalYYYYMMDD 사용!
     const lastSundayStr = getLocalYYYYMMDD(lastSunday);
 
     const { data: sundayAttData } = await supabase.from('attendance').select('*').eq('attendance_date', lastSundayStr);
@@ -304,7 +334,6 @@ export default function App() {
     handleConfirm("로그아웃 하시겠습니까?", () => { setIsAuthenticated(false); setCurrentUser(null); setUserRole(''); setAuthMode('login'); setCurrentTab('dashboard'); setLoginForm({ email: '', password: '' }); setStudents([]); setTeachers([]); setPosts([]); setDuties([]); setLogs([]); setAttendance({}); setSundayAttendance({}); });
   };
 
-  // ⭐ 실시간 대시보드 반영을 관장하는 출석체크 함수 (시간 오류가 해결되어 이제 완벽하게 작동합니다)
   const handleAttendance = async (id, status) => {
     setAttendance(prev => ({ ...prev, [id]: status }));
     
@@ -350,7 +379,7 @@ export default function App() {
     
     if (editStudentModal.isNew) {
       const { data, error } = await supabase.from('students').insert([studentData]).select().single();
-      if (!error && data) { setStudents([...students, { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests }]); showToast('신규 학생이 등록되었습니다.'); }
+      if (!error && data) { setStudents([...students, { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests, prayedCount: 0 }]); showToast('신규 학생이 등록되었습니다.'); }
     } else {
       const { data, error } = await supabase.from('students').update(studentData).eq('id', editStudentModal.student.id).select().single();
       if (!error && data) { setStudents(students.map(s => s.id === data.id ? { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests } : s)); showToast('학생 정보가 업데이트되었습니다.'); }
@@ -360,9 +389,28 @@ export default function App() {
 
   const saveQuickLog = async () => {
     if (quickLogForm.text.trim() === '') return;
-    const logData = { student_id: quickLogModal.student.id, visit_date: quickLogForm.date, method: quickLogForm.method, content: quickLogForm.text, teacher_name: currentUser?.name || '시스템' };
-    const { data, error } = await supabase.from('visitation_logs').insert([logData]).select().single();
-    if (!error && data) { setLogs([{ ...data, studentId: data.student_id, date: data.visit_date, teacher: data.teacher_name }, ...logs]); showToast('심방 기록이 저장되었습니다.'); }
+    
+    if (quickLogModal.existingLog) {
+      const { data, error } = await supabase.from('visitation_logs')
+        .update({ visit_date: quickLogForm.date, method: quickLogForm.method, content: quickLogForm.text })
+        .eq('id', quickLogModal.existingLog.id)
+        .select().single();
+        
+      if (!error && data) { 
+        setLogs(logs.map(l => l.id === data.id ? { ...data, studentId: data.student_id, date: data.visit_date, teacher: data.teacher_name } : l)); 
+        showToast('심방 기록이 수정되었습니다.'); 
+      } else {
+        showToast('심방 기록 수정에 실패했습니다.', 'error');
+      }
+    } else {
+      const logData = { student_id: quickLogModal.student.id, visit_date: quickLogForm.date, method: quickLogForm.method, content: quickLogForm.text, teacher_name: currentUser?.name || '시스템' };
+      const { data, error } = await supabase.from('visitation_logs').insert([logData]).select().single();
+      
+      if (!error && data) { 
+        setLogs([{ ...data, studentId: data.student_id, date: data.visit_date, teacher: data.teacher_name }, ...logs]); 
+        showToast('새 심방 기록이 추가되었습니다.'); 
+      }
+    }
     closeQuickLog();
   };
 
@@ -388,14 +436,42 @@ export default function App() {
   };
 
   const navigateToProfile = (student) => { setSelectedStudent(student); setCurrentTab('profile'); };
-  const openQuickLog = (student) => { setQuickLogModal({ isOpen: true, student }); setQuickLogForm({ text: '', method: '대면', date: getLocalYYYYMMDD() }); }; // 여기도 로컬시간
-  const closeQuickLog = () => setQuickLogModal({ isOpen: false, student: null });
+  
+  const openQuickLog = (student, existingLog = null) => { 
+    setQuickLogModal({ isOpen: true, student, existingLog }); 
+    if (existingLog) {
+      setQuickLogForm({ text: existingLog.content, method: existingLog.method || '대면', date: existingLog.date });
+    } else {
+      setQuickLogForm({ text: '', method: '대면', date: getLocalYYYYMMDD() }); 
+    }
+  };
+  
+  const closeQuickLog = () => setQuickLogModal({ isOpen: false, student: null, existingLog: null });
+  
   const openEditStudent = (student, isNew = false) => {
     if(isNew) setEditStudentModal({ isOpen: true, isNew: true, student: { id: Date.now(), name: '', birth: '', group: userRole === '교사' ? currentUser.group : '1반', grade: '', school: '', phone: '', parentsName: '', parentsPhone: '', prayer: '', points: 0, consecutiveAbsences: 0, gender: '남' } });
     else setEditStudentModal({ isOpen: true, isNew: false, student: { ...student } });
   };
   const closeEditStudent = () => setEditStudentModal({ isOpen: false, student: null, isNew: false });
-  const handleEditChange = (e) => setEditStudentModal(prev => ({ ...prev, student: { ...prev.student, [e.target.name]: e.target.value } }));
+
+  const handleEditChange = (e) => {
+    let { name, value } = e.target;
+    if (name === 'birth') {
+      let v = value.replace(/\D/g, ''); 
+      if (v.length > 8) v = v.substring(0, 8); 
+      if (v.length > 6) value = `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6)}`;
+      else if (v.length > 4) value = `${v.slice(0, 4)}-${v.slice(4)}`;
+      else value = v;
+    } else if (name === 'phone') {
+      let v = value.replace(/\D/g, ''); 
+      if (v.length > 11) v = v.substring(0, 11); 
+      if (v.length > 7) value = `${v.slice(0, 3)}-${v.slice(3, 7)}-${v.slice(7)}`;
+      else if (v.length > 3) value = `${v.slice(0, 3)}-${v.slice(3)}`;
+      else value = v;
+    }
+    setEditStudentModal(prev => ({ ...prev, student: { ...prev.student, [name]: value } }));
+  };
+
   const openEditDuty = (duty) => setEditDutyModal({ isOpen: true, duty: { ...duty } });
   const closeEditDuty = () => setEditDutyModal({ isOpen: false, duty: null });
 
@@ -446,13 +522,44 @@ export default function App() {
         </header>
 
         <main id="main-scroll-area" onScroll={handleMainScroll} className="flex-1 overflow-y-auto pb-20 scroll-smooth">
-          {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={students} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} />}
+          
+          {/* ⭐ 대시보드 상단 목양 골든타임 알림 렌더링 영역 */}
+          {currentTab === 'dashboard' && (
+            <div className="p-4 pb-0 space-y-2">
+              {longAbsentees.length > 0 && (
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-start shadow-sm animate-in fade-in zoom-in duration-300">
+                   <AlertCircle size={16} className="text-rose-500 mr-2 mt-0.5 shrink-0" />
+                   <div>
+                      <h4 className="text-xs font-bold text-rose-700 mb-0.5">장기 결석 주의 (3주 이상)</h4>
+                      <p className="text-[10px] text-rose-600 leading-tight">
+                        <span className="font-bold">{longAbsentees.map(s => s.name).join(', ')}</span> 학생이 보이지 않습니다. 이번 주에 꼭 연락해 보세요!
+                      </p>
+                   </div>
+                </div>
+              )}
+              {needCareStudents.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start shadow-sm animate-in fade-in zoom-in duration-300">
+                   <AlertCircle size={16} className="text-amber-500 mr-2 mt-0.5 shrink-0" />
+                   <div>
+                      <h4 className="text-xs font-bold text-amber-700 mb-0.5">심방 골든타임 (90일 경과)</h4>
+                      <p className="text-[10px] text-amber-600 leading-tight">
+                        <span className="font-bold">{needCareStudents.length}명</span>의 학생과 깊은 대화를 나눈 지 오래되었습니다.
+                      </p>
+                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={students} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} logs={logs} />}
           
           {currentTab === 'attendance' && <Attendance userRole={userRole} currentUser={currentUser} students={visibleStudents} attendance={attendance} teachers={teachers} uniqueGroups={visibleGroups} handleAttendance={handleAttendance} handleAllPresent={handleAllPresent} showToast={showToast} selectedAttDate={selectedAttDate} setSelectedAttDate={setSelectedAttDate} fetchAttendanceByDate={fetchAttendanceByDate} />}
           
-          {currentTab === 'students' && <StudentList userRole={userRole} currentUser={currentUser} students={visibleStudents} studentSearch={studentSearch} setStudentSearch={setStudentSearch} openEditStudent={openEditStudent} navigateToProfile={navigateToProfile} />}
-          {currentTab === 'community' && <Community userRole={userRole} currentUser={currentUser} posts={posts} setPosts={setPosts} duties={duties} setDuties={setDuties} communityTab={communityTab} setCommunityTab={setCommunityTab} showToast={showToast} setPostModal={setPostModal} />}
-          {currentTab === 'profile' && <Profile selectedStudent={selectedStudent} logs={logs} setCurrentTab={setCurrentTab} openEditStudent={openEditStudent} showToast={showToast} openQuickLog={openQuickLog} />}
+          {currentTab === 'students' && <StudentList userRole={userRole} currentUser={currentUser} students={visibleStudents} studentSearch={studentSearch} setStudentSearch={setStudentSearch} openEditStudent={openEditStudent} navigateToProfile={navigateToProfile} logs={logs} />}
+          
+          {currentTab === 'community' && <Community userRole={userRole} currentUser={currentUser} posts={posts} setPosts={setPosts} duties={duties} setDuties={setDuties} communityTab={communityTab} setCommunityTab={setCommunityTab} showToast={showToast} setPostModal={setPostModal} students={visibleStudents} setStudents={setStudents} />}
+          
+          {currentTab === 'profile' && <Profile selectedStudent={selectedStudent} logs={logs} setLogs={setLogs} setCurrentTab={setCurrentTab} openEditStudent={openEditStudent} showToast={showToast} openQuickLog={openQuickLog} />}
           {currentTab === 'admin' && <AdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} students={students} setStudents={setStudents} teachers={teachers} setTeachers={setTeachers} pendingTeachers={pendingTeachers} setPendingTeachers={setPendingTeachers} uniqueGroups={uniqueGroups} showToast={showToast} />}
           {currentTab === 'superadmin' && (
             <SuperAdminCenter 
@@ -482,8 +589,46 @@ export default function App() {
           </div>
         )}
 
-        {/* 각종 기능 모달 (전부 fixed z-[9999] 적용) */}
-        {quickLogModal.isOpen && quickLogModal.student && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"><div className="flex justify-between items-center p-4 border-b border-stone-100"><h3 className="font-bold text-stone-800 flex items-center"><FileText size={18} className="mr-2 text-emerald-500" />{quickLogModal.student.name} <span className="text-sm text-stone-400 font-normal ml-1">심방 기록</span></h3><button onClick={closeQuickLog} className="text-stone-400"><X size={18} /></button></div><div className="p-4 space-y-3"><div className="flex space-x-2"><div className="flex-1"><label className="text-[10px] font-bold text-stone-500 mb-1">심방 일자</label><input type="date" value={quickLogForm.date} onChange={(e) => setQuickLogForm({...quickLogForm, date: e.target.value})} className="w-full font-bold text-stone-700 text-xs p-2 bg-stone-50 rounded-lg border border-stone-200" /></div><div className="flex-1"><label className="text-[10px] font-bold text-stone-500 mb-1">심방 방법</label><select value={quickLogForm.method} onChange={(e) => setQuickLogForm({...quickLogForm, method: e.target.value})} className="w-full font-bold text-stone-700 text-xs p-2 bg-stone-50 rounded-lg border border-stone-200"><option value="대면">대면</option><option value="전화">전화</option><option value="카톡/문자">카톡/문자</option><option value="기타">기타</option></select></div></div><div><label className="text-[10px] font-bold text-stone-500 mb-1">심방 내용</label><textarea value={quickLogForm.text} onChange={(e) => setQuickLogForm({...quickLogForm, text: e.target.value})} className="w-full text-sm p-3 bg-stone-50 rounded-xl border border-stone-200 h-24 resize-none" autoFocus /></div><div className="flex space-x-2 pt-2"><button onClick={closeQuickLog} className="flex-1 py-2.5 bg-stone-100 text-stone-600 text-sm font-bold rounded-xl">취소</button><button onClick={saveQuickLog} className="flex-1 py-2.5 bg-emerald-500 text-white text-sm font-bold rounded-xl">저장하기</button></div></div></div></div>)}
+        {quickLogModal.isOpen && quickLogModal.student && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="flex justify-between items-center p-4 border-b border-stone-100">
+                <h3 className="font-bold text-stone-800 flex items-center">
+                  <FileText size={18} className="mr-2 text-emerald-500" />
+                  {quickLogModal.student.name} <span className="text-sm text-stone-400 font-normal ml-1">심방 기록 {quickLogModal.existingLog ? '수정' : ''}</span>
+                </h3>
+                <button onClick={closeQuickLog} className="text-stone-400"><X size={18} /></button>
+              </div>
+              <div className="p-4 space-y-3">
+                <div className="flex space-x-2">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-bold text-stone-500 mb-1">심방 일자</label>
+                    <input type="date" value={quickLogForm.date} onChange={(e) => setQuickLogForm({...quickLogForm, date: e.target.value})} className="w-full font-bold text-stone-700 text-xs p-2 bg-stone-50 rounded-lg border border-stone-200" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[10px] font-bold text-stone-500 mb-1">심방 방법</label>
+                    <select value={quickLogForm.method} onChange={(e) => setQuickLogForm({...quickLogForm, method: e.target.value})} className="w-full font-bold text-stone-700 text-xs p-2 bg-stone-50 rounded-lg border border-stone-200">
+                      <option value="대면">대면</option>
+                      <option value="전화">전화</option>
+                      <option value="카톡/문자">카톡/문자</option>
+                      <option value="기타">기타</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-stone-500 mb-1">심방 내용</label>
+                  <textarea value={quickLogForm.text} onChange={(e) => setQuickLogForm({...quickLogForm, text: e.target.value})} className="w-full text-sm p-3 bg-stone-50 rounded-xl border border-stone-200 h-24 resize-none" autoFocus />
+                </div>
+                <div className="flex space-x-2 pt-2">
+                  <button onClick={closeQuickLog} className="flex-1 py-2.5 bg-stone-100 text-stone-600 text-sm font-bold rounded-xl">취소</button>
+                  <button onClick={saveQuickLog} className="flex-1 py-2.5 bg-emerald-500 text-white text-sm font-bold rounded-xl">
+                    {quickLogModal.existingLog ? '수정하기' : '저장하기'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
         {postModal.isOpen && postModal.post && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
@@ -548,10 +693,16 @@ export default function App() {
                     <label className="text-xs font-bold text-stone-600 mb-1 block">학교</label>
                     <input type="text" name="school" value={editStudentModal.student.school || ''} onChange={handleEditChange} className="w-full bg-stone-50 border border-stone-200 rounded-lg p-2.5 text-sm outline-none focus:border-emerald-400 transition-colors" />
                   </div>
+                  
                   <div className="col-span-2">
                     <label className="text-xs font-bold text-stone-600 mb-1 block">학생 연락처</label>
-                    <input type="text" name="phone" value={editStudentModal.student.phone} onChange={handleEditChange} className="w-full bg-stone-50 border border-stone-200 rounded-lg p-2.5 text-sm outline-none focus:border-emerald-400 transition-colors" />
+                    <div className="flex items-center space-x-2">
+                      <input type="text" name="phone" value={editStudentModal.student.phone} onChange={handleEditChange} className="flex-1 bg-stone-50 border border-stone-200 rounded-lg p-2.5 text-sm outline-none focus:border-emerald-400 transition-colors" />
+                      <a href={`tel:${editStudentModal.student.phone}`} className="p-2.5 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm"><Phone size={18} /></a>
+                      <a href={`sms:${editStudentModal.student.phone}`} className="p-2.5 bg-amber-100 text-amber-600 rounded-lg hover:bg-amber-200 transition-colors shadow-sm"><MessageCircle size={18} /></a>
+                    </div>
                   </div>
+
                   <div className="col-span-2 mt-2">
                     <label className="text-xs font-bold text-emerald-700 mb-1 flex items-center bg-emerald-50 py-1.5 px-2 rounded-t-lg border border-emerald-100 border-b-0">
                       <FileText size={14} className="mr-1.5" /> 특이사항 및 기도제목
@@ -580,6 +731,31 @@ export default function App() {
 
         {confirmDialog.isOpen && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-xs text-center animate-in zoom-in-95 duration-200"><AlertCircle size={40} className="mx-auto text-emerald-500 mb-4" /><p className="text-stone-800 font-bold mb-6">{confirmDialog.message}</p><div className="flex space-x-3"><button onClick={closeConfirm} className="flex-1 bg-stone-100 py-3 rounded-xl font-bold">취소</button><button onClick={executeConfirm} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold">확인</button></div></div></div>)}
         {toast.isOpen && (<div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">{toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-rose-400" /> : <CheckCircle2 size={18} className="mr-2 text-emerald-400" />}<span className="text-sm font-bold">{toast.message}</span></div>)}
+
+        {/* ⭐ 주말(토요일) 기도 팝업 모달 영역 */}
+        {prayerPopup.isOpen && prayerPopup.student && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4">
+            <div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm text-center animate-in zoom-in-95 duration-300">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">🙏</span>
+              </div>
+              <h3 className="font-bold text-stone-800 text-lg mb-2">오늘의 중보기도</h3>
+              <p className="text-sm text-stone-600 mb-4">
+                오늘은 우리 반 <span className="font-bold text-emerald-600">{prayerPopup.student.name}</span> 학생을 위해<br/>마음을 모아주세요.
+              </p>
+              <div className="bg-[#FFFCF9] p-4 rounded-xl border border-emerald-100 text-left mb-6 shadow-inner">
+                <p className="text-xs font-bold text-emerald-700 mb-1 flex items-center"><FileText size={12} className="mr-1"/> 기도제목</p>
+                <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{prayerPopup.student.prayer}</p>
+              </div>
+              <button 
+                onClick={() => setPrayerPopup({ isOpen: false, student: null })} 
+                className="w-full bg-emerald-500 text-white py-3.5 rounded-xl font-bold shadow-sm hover:bg-emerald-600 transition-colors"
+              >
+                기도했습니다
+              </button>
+            </div>
+          </div>
+        )}
 
         {showScrollTop && (
           <button 

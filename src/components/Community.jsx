@@ -1,11 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { Edit, Image as ImageIcon, Calendar, Plus, X, Check, FileText, EyeOff, Eye } from 'lucide-react';
+import { Edit, Image as ImageIcon, Calendar, Plus, X, Check, FileText, EyeOff, Eye, Pin, Trash2 } from 'lucide-react';
 import { supabase } from '../supabase';
 
 export default function Community({ userRole, currentUser, posts, setPosts, duties, setDuties, communityTab, setCommunityTab, showToast, setPostModal }) {
   const [writeModal, setWriteModal] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', imageBase64: '' });
-  const [editingPostId, setEditingPostId] = useState(null); // ⭐ 수정 모드인지 확인하는 상태
+  const [editingPostId, setEditingPostId] = useState(null);
   const fileInputRef = useRef(null);
 
   const [editDutyMode, setEditDutyMode] = useState(false);
@@ -43,15 +43,13 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
     setWriteModal(true);
   };
 
-  // ⭐ 게시글 수정창 열기
   const openEditModal = (e, post) => {
-    e.stopPropagation(); // 모달 클릭 시 글 상세보기가 열리는 것을 방지
+    e.stopPropagation();
     setForm({ title: post.title, content: post.content, imageBase64: post.image_url || '' });
     setEditingPostId(post.id);
     setWriteModal(true);
   };
 
-  // ⭐ 숨기기 / 숨김 해제 토글 함수
   const handleToggleHide = async (e, post) => {
     e.stopPropagation();
     const newHiddenStatus = !post.is_hidden;
@@ -68,7 +66,30 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
     showToast(newHiddenStatus ? "게시글이 숨김 처리되었습니다." : "게시글이 다시 공개되었습니다.");
   };
 
-  // ⭐ 저장 로직 (신규 작성 + 기존 글 수정 통합)
+  // ⭐ 상단 고정 / 해제 토글 함수
+  const handleTogglePin = async (e, post) => {
+    e.stopPropagation();
+    const newPinStatus = !post.is_pinned;
+    
+    const { error } = await supabase.from('posts').update({ is_pinned: newPinStatus }).eq('id', post.id);
+    if (error) return showToast("상단 고정 설정에 실패했습니다.", "error");
+
+    setPosts(posts.map(p => p.id === post.id ? { ...p, is_pinned: newPinStatus } : p));
+    showToast(newPinStatus ? "게시글이 상단에 고정되었습니다." : "상단 고정이 해제되었습니다.");
+  };
+
+  // ⭐ 삭제 함수
+  const handleDeletePost = async (e, post) => {
+    e.stopPropagation();
+    if (!window.confirm("이 게시글을 완전히 삭제하시겠습니까? (복구 불가)")) return;
+
+    const { error } = await supabase.from('posts').delete().eq('id', post.id);
+    if (error) return showToast("게시글 삭제에 실패했습니다.", "error");
+
+    setPosts(posts.filter(p => p.id !== post.id));
+    showToast("게시글이 삭제되었습니다.");
+  };
+
   const savePost = async () => {
     if (!form.title.trim() || !form.content.trim()) return showToast("제목과 내용을 입력해주세요.", "error");
     
@@ -80,23 +101,23 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
     };
 
     if (editingPostId) {
-      // 1. 기존 게시글 수정 (UPDATE)
       const { error } = await supabase.from('posts').update(postData).eq('id', editingPostId).select().single();
       if (error) return showToast("수정에 실패했습니다.", "error");
       
       setPosts(posts.map(p => p.id === editingPostId ? { ...p, ...postData, image_url: postData.image_url, hasFile: postData.has_file } : p));
       showToast("게시글이 수정되었습니다.");
     } else {
-      // 2. 새 게시글 작성 (INSERT)
       postData.church_id = currentUser.churchId;
       postData.post_type = communityTab;
       postData.author = currentUser.name;
       postData.post_date = new Date().toISOString().split('T')[0];
       postData.is_hidden = false;
+      postData.is_pinned = false; // 새 글은 기본적으로 고정 아님
 
       const { data, error } = await supabase.from('posts').insert([postData]).select().single();
       if (error) return showToast("게시글 작성에 실패했습니다.", "error");
       
+      // 최신 글이 배열의 맨 앞에 오도록 추가
       setPosts([{ ...data, type: data.post_type, hasFile: data.has_file, date: data.post_date }, ...posts]);
       showToast("게시글이 성공적으로 등록되었습니다.");
     }
@@ -135,8 +156,17 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
     setTimeout(() => window.location.reload(), 1000); 
   };
 
-  // ⭐ 관리자는 숨긴 글도 보고, 교사는 안 숨긴 글만 보도록 필터링
-  const filteredPosts = posts.filter(p => p.type === communityTab && (isAdmin || !p.is_hidden));
+  // ⭐ 최신순 및 상단 고정 정렬 반영
+  const filteredPosts = posts
+    .filter(p => p.type === communityTab && (isAdmin || !p.is_hidden))
+    .sort((a, b) => {
+      // 1순위: 상단 고정(is_pinned) 여부
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+      
+      // 2순위: 최신순 (id가 클수록 최신)
+      return b.id - a.id;
+    });
 
   return (
     <div className="p-4 space-y-4 h-full relative">
@@ -172,27 +202,36 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
             <div 
               key={post.id} 
               onClick={() => setPostModal({ isOpen: true, post })} 
-              className={`bg-white p-4 rounded-2xl shadow-sm border cursor-pointer transition-colors relative ${post.is_hidden ? 'border-stone-200 bg-stone-50 opacity-70' : 'border-stone-100 hover:border-emerald-200'}`}
+              className={`bg-white p-4 rounded-2xl shadow-sm border cursor-pointer transition-colors relative ${post.is_hidden ? 'border-stone-200 bg-stone-50 opacity-70' : 'border-stone-100 hover:border-emerald-200'} ${post.is_pinned ? 'border-emerald-200 bg-emerald-50/30' : ''}`}
             >
-              {/* 숨김 뱃지 표시 */}
-              {post.is_hidden && <div className="absolute top-3 right-3 text-[10px] bg-stone-200 text-stone-600 px-2 py-0.5 rounded font-bold flex items-center"><EyeOff size={10} className="mr-1"/>숨김 처리됨</div>}
+              {/* 뱃지 표시 영역 (고정 & 숨김) */}
+              <div className="absolute top-3 right-3 flex space-x-1">
+                {post.is_pinned && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold flex items-center"><Pin size={10} className="mr-1"/>상단 고정됨</span>}
+                {post.is_hidden && <span className="text-[10px] bg-stone-200 text-stone-600 px-2 py-0.5 rounded font-bold flex items-center"><EyeOff size={10} className="mr-1"/>숨김 처리됨</span>}
+              </div>
               
               <div className="flex justify-between items-start mb-2">
-                <h3 className={`font-bold text-sm pr-20 ${post.is_hidden ? 'text-stone-500' : 'text-stone-800'}`}>{post.title}</h3>
-                {post.hasFile && <ImageIcon size={14} className="text-emerald-500 shrink-0 ml-2" />}
+                <h3 className={`font-bold text-sm pr-24 ${post.is_hidden ? 'text-stone-500' : 'text-stone-800'}`}>{post.title}</h3>
+                {post.hasFile && <ImageIcon size={14} className="text-emerald-500 shrink-0 ml-2 mt-0.5" />}
               </div>
               <div className="flex justify-between text-[10px] text-stone-400">
                 <span>{post.author}</span><span>{post.date}</span>
               </div>
               
-              {/* ⭐ 관리자 전용 수정/숨기기 버튼 */}
+              {/* 관리자 전용 제어 버튼들 (상단 고정, 숨기기, 수정, 삭제) */}
               {isAdmin && (
-                <div className="mt-3 pt-3 border-t border-stone-100 flex justify-end space-x-2">
+                <div className="mt-3 pt-3 border-t border-stone-100 flex flex-wrap justify-end gap-2">
+                  <button onClick={(e) => handleTogglePin(e, post)} className="text-xs text-amber-600 hover:text-amber-700 px-2 py-1 rounded bg-amber-50 font-bold flex items-center transition-colors">
+                    <Pin size={12} className="mr-1"/> {post.is_pinned ? '고정 해제' : '상단 고정'}
+                  </button>
                   <button onClick={(e) => handleToggleHide(e, post)} className="text-xs text-stone-500 hover:text-stone-700 px-2 py-1 rounded bg-stone-100 font-bold flex items-center transition-colors">
                     {post.is_hidden ? <><Eye size={12} className="mr-1"/> 숨김 해제</> : <><EyeOff size={12} className="mr-1"/> 숨기기</>}
                   </button>
                   <button onClick={(e) => openEditModal(e, post)} className="text-xs text-emerald-600 hover:text-emerald-700 px-2 py-1 rounded bg-emerald-50 font-bold flex items-center transition-colors">
                     <Edit size={12} className="mr-1"/> 수정
+                  </button>
+                  <button onClick={(e) => handleDeletePost(e, post)} className="text-xs text-rose-600 hover:text-rose-700 px-2 py-1 rounded bg-rose-50 font-bold flex items-center transition-colors">
+                    <Trash2 size={12} className="mr-1"/> 삭제
                   </button>
                 </div>
               )}
@@ -251,7 +290,7 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
         </div>
       )}
 
-      {/* ⭐ 글쓰기 & 글수정 모달 (fixed 속성으로 변경됨) */}
+      {/* 글쓰기 & 글수정 모달 */}
       {writeModal && (
         <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm h-[85vh] sm:h-auto sm:max-h-[80vh] sm:rounded-2xl rounded-t-3xl shadow-xl flex flex-col animate-in slide-in-from-bottom-5">

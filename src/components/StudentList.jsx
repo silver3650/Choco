@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Search, UserPlus, ChevronRight, Phone, Filter } from 'lucide-react';
+import { Search, UserPlus, ChevronRight, Phone, Filter, MessageCircle, FileText } from 'lucide-react';
 
-export default function StudentList({ userRole, currentUser, students, studentSearch, setStudentSearch, openEditStudent, navigateToProfile }) {
+// ⭐ logs 속성을 추가로 받도록 수정되었습니다.
+export default function StudentList({ userRole, currentUser, students, studentSearch, setStudentSearch, openEditStudent, navigateToProfile, logs }) {
   const [filterGroup, setFilterGroup] = useState('전체');
   const [filterGrade, setFilterGrade] = useState('전체');
   const [filterGender, setFilterGender] = useState('전체');
@@ -31,6 +32,19 @@ export default function StudentList({ userRole, currentUser, students, studentSe
   }
 
   filtered.sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'));
+
+  // ⭐ 전화 및 문자 연결 함수 추가
+  const handleCall = (e, phone) => {
+    e.stopPropagation();
+    if (!phone) return alert("연락처 정보가 없습니다.");
+    window.location.href = `tel:${phone}`;
+  };
+
+  const handleMessage = (e, phone) => {
+    e.stopPropagation();
+    if (!phone) return alert("연락처 정보가 없습니다.");
+    window.location.href = `sms:${phone}`;
+  };
 
   return (
     <div className="p-4 space-y-4">
@@ -71,21 +85,44 @@ export default function StudentList({ userRole, currentUser, students, studentSe
       </div>
 
       <div className="space-y-3 pt-2">
-        {filtered.map(student => (
-          <div key={student.id} onClick={() => navigateToProfile(student)} className="bg-white p-4 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center cursor-pointer hover:border-emerald-300 transition-all">
-            <div className="flex items-center">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg mr-4 ${student.gender === '여' ? 'bg-rose-50 text-rose-500' : 'bg-sky-50 text-sky-600'}`}>
-                {student.name.charAt(0)}
+        {filtered.map(student => {
+          // ⭐ 특이사항이나 심방기록이 있는지 체크
+          const hasSpecialNote = student.prayer && student.prayer.trim().length > 0;
+          const hasLog = logs && logs.some(l => l.studentId === student.id);
+          const showNewIcon = hasSpecialNote || hasLog;
+
+          return (
+            <div key={student.id} onClick={() => navigateToProfile(student)} className="bg-white p-4 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center cursor-pointer hover:border-emerald-300 transition-all">
+              <div className="flex items-center">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg mr-4 ${student.gender === '여' ? 'bg-rose-50 text-rose-500' : 'bg-sky-50 text-sky-600'}`}>
+                  {student.name.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="font-bold text-stone-800 text-base mb-0.5 flex items-center">
+                    {student.name} <span className="text-xs font-normal text-stone-400 mx-1">{student.group}</span>
+                    {/* ⭐ 새글(N) 아이콘 표시 */}
+                    {showNewIcon && (
+                      <span className="flex items-center text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded-full font-bold shadow-sm">
+                        <FileText size={8} className="mr-0.5" /> N
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-stone-500">{student.grade || '학년 미상'}</p>
+                  {student.phone && <p className="text-[10px] text-stone-400 flex items-center mt-1"><Phone size={10} className="mr-1"/> {student.phone}</p>}
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-stone-800 text-base mb-0.5">{student.name} <span className="text-xs font-normal text-stone-400 ml-1">{student.group}</span></h3>
-                <p className="text-xs text-stone-500">{student.grade || '학년 미상'}</p>
-                {student.phone && <p className="text-[10px] text-stone-400 flex items-center mt-1"><Phone size={10} className="mr-1"/> {student.phone}</p>}
+              
+              <div className="flex items-center">
+                {/* ⭐ 리스트에서도 바로 전화/문자 할 수 있도록 퀵 액션 버튼 추가 */}
+                <div className="flex space-x-1.5 mr-3">
+                  <button onClick={(e) => handleCall(e, student.phone)} className="p-1.5 bg-emerald-50 text-emerald-600 rounded-full hover:bg-emerald-100 transition-colors shadow-sm" title="전화걸기"><Phone size={14} /></button>
+                  <button onClick={(e) => handleMessage(e, student.phone)} className="p-1.5 bg-amber-50 text-amber-600 rounded-full hover:bg-amber-100 transition-colors shadow-sm" title="문자보내기"><MessageCircle size={14} /></button>
+                </div>
+                <ChevronRight size={20} className="text-stone-300" />
               </div>
             </div>
-            <ChevronRight size={20} className="text-stone-300" />
-          </div>
-        ))}
+          );
+        })}
         {filtered.length === 0 && <div className="text-center py-10 text-stone-400 text-sm bg-white rounded-xl border border-stone-100 border-dashed">조건에 맞는 학생이 없습니다.</div>}
       </div>
     </div>
