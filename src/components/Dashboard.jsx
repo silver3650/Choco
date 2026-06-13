@@ -101,6 +101,7 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
   // ⭐ [수정됨] 공지사항뿐만 아니라 자료실, 기도나눔 게시글도 포함하여 최신 3개를 가져옵니다.
   const recentPosts = posts
     .filter(p => ['notice', 'material', 'prayer'].includes(p.type))
+    .sort((a, b) => b.id - a.id) // ⭐ 이 줄을 추가하여 최신 글(번호가 높은 글)이 위로 오게 정렬합니다.
     .slice(0, 3);
     
   const currentMonthStr = currentActualMonth + "월";
