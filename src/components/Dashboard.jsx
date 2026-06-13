@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronRight, CalendarCheck, Users, Clock, AlertCircle, Phone, MessageCircle, FileText, BarChart2 } from 'lucide-react';
 
-export default function Dashboard({ userRole, currentUser, students, allStudents, attendance, sundayAttendance, sundayDate, teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile }) {
+export default function Dashboard({ userRole, currentUser, students, allStudents, attendance, sundayAttendance, sundayDate, teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile, setPostModal }) {
   const [statPeriod, setStatPeriod] = useState('weekly'); // 'weekly', 'monthly', 'custom'
   
   // ⭐ 그래프 가로 스크롤을 항상 우측(최신)으로 맞추기 위한 Ref
@@ -394,7 +394,11 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
         </div>
         <div className="space-y-2">
           {recentPosts.length > 0 ? recentPosts.map(post => (
-            <div key={post.id} className="bg-white p-3.5 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center">
+            <div 
+              key={post.id} 
+              onClick={() => setPostModal({ isOpen: true, post })}
+              className="bg-white p-3.5 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center cursor-pointer hover:border-emerald-300 transition-colors"
+            >
               <span className="text-sm font-bold text-stone-700 truncate mr-4 flex items-center">
                 {/* ⭐ 게시글 종류 뱃지 표시 */}
                 <span className="text-[10px] bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded font-bold mr-2 whitespace-nowrap">
