@@ -89,13 +89,32 @@ export default function App() {
     ? ['전체', currentUser.group]
     : uniqueGroups;
 
-  // ⭐ [수정된 부분] 오늘 기준이 아닌 '이번 달' 기준으로 변경하고, 관리자 모드일 때는 전체 학생 명단에서 찾도록 수정했습니다!
   const todayObj = new Date();
   const currentMonthStr = String(todayObj.getMonth() + 1).padStart(2, '0');
   
   const targetStudents = userRole === '교사' ? visibleStudents : students;
 
-  const monthBirthdays = targetStudents.filter(s => s.birth && s.birth.substring(5, 7) === currentMonthStr);
+  // ⭐ [수정된 부분] substring 대신 split을 사용하여 YYYY-MM-DD 형식과 YYYY-M-D 형식을 모두 안전하게 처리합니다.
+  // ⭐ [수정] 어떤 기호(-, ., /)가 들어가도 안전하게 월(Month)을 추출하도록 정규식 적용
+  const monthBirthdays = targetStudents.filter(s => {
+    if (!s.birth) return false;
+    
+    // 숫자 이외의 모든 특수기호를 기준으로 분리
+    const parts = s.birth.split(/[^0-9]/).filter(Boolean);
+    let m = '';
+    
+    if (parts.length >= 2) {
+      // 첫 부분이 연도(4자리)면 두 번째가 월, 연도가 없으면 첫 번째가 월
+      m = parts[0].length === 4 ? parts[1] : parts[0];
+    } else if (parts.length === 1 && parts[0].length >= 6) {
+      // 기호 없이 20120607 처럼 숫자로만 붙여 쓴 경우
+      m = parts[0].substring(4, 6);
+    }
+    
+    // 06과 6을 동일하게 취급하여 비교
+    return parseInt(m, 10) === parseInt(currentMonthStr, 10);
+  });
+  
   const eventStudents = targetStudents.filter(s => s.specialEvent && s.specialEvent.trim() !== '');
 
   useEffect(() => {
@@ -137,7 +156,7 @@ export default function App() {
       supabase.from('students').select('*').eq('church_id', churchId).order('id', { ascending: true }),
       supabase.from('teachers').select('*').eq('church_id', churchId),
       supabase.from('posts').select('*').eq('church_id', churchId),
-      supabase.from('duties').select('*').eq('church_id', churchId),
+      supabase.from('duties').select('*').eq('church_id', churchId).order('duty_date', { ascending: true }), // ⭐ 일정도 날짜순으로 정렬되게 추가
       supabase.from('visitation_logs').select('*')
     ]);
 
@@ -522,7 +541,8 @@ export default function App() {
               <div className="bg-purple-50 border border-purple-200 rounded-xl p-3.5 flex items-start shadow-sm animate-in fade-in zoom-in duration-300">
                  <span className="text-lg mr-2.5 mt-0.5 shrink-0">🎂</span>
                  <div className="flex-1">
-                    <h4 className="text-xs font-bold text-purple-700 mb-1">{userRole === '교사' ? '우리 반' : '교회 학교 전체'} 삶의 자리 알림</h4>
+                    {/* ⭐ 명칭 변경: '교회 학교 전체' -> '전체' */}
+                    <h4 className="text-xs font-bold text-purple-700 mb-1">{userRole === '교사' ? '우리 반' : '전체'} 삶의 자리 알림</h4>
                     <div className="space-y-1.5 text-[11px] text-purple-600 leading-tight">
                       {monthBirthdays.length > 0 && (
                         <p>🎉 <span className="font-bold">이번 달({currentMonthStr}월) 생일:</span> {monthBirthdays.map(s => `${s.name}(${s.group})`).join(', ')}</p>

@@ -14,6 +14,14 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
 
   const isAdmin = userRole !== '교사' || currentUser?.originalRole === '담당목사';
 
+  // ⭐ 한국 시간 기준 YYYY-MM-DD 변환 함수 추가
+  const getLocalYYYYMMDD = (d) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const getNext4Sundays = () => {
     const sundays = [];
     let d = new Date(); 
@@ -109,7 +117,7 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
       postData.church_id = currentUser.churchId;
       postData.post_type = communityTab;
       postData.author = currentUser.name;
-      postData.post_date = new Date().toISOString().split('T')[0];
+      postData.post_date = getLocalYYYYMMDD(new Date()); // 작성일도 한국시간 기준
       postData.is_hidden = false;
       postData.is_pinned = false;
 
@@ -127,7 +135,8 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
 
   const startEditDuties = () => {
     const initForm = sundays.map(sun => {
-      const dateStr = sun.toISOString().split('T')[0];
+      // ⭐ 시차 문제 해결: toISOString 대신 getLocalYYYYMMDD 사용
+      const dateStr = getLocalYYYYMMDD(sun);
       const existing = duties.find(d => d.duty_date === dateStr);
       return existing ? { ...existing } : { duty_date: dateStr, leader: '', prayer: '', church_id: currentUser.churchId, duty_month: `${sun.getMonth()+1}월` };
     });
@@ -154,7 +163,6 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
     setTimeout(() => window.location.reload(), 1000); 
   };
 
-  // ⭐ 기도했어요 버튼 동작 (카운트 1 증가)
   const handlePrayed = async (student) => {
     const newCount = (student.prayedCount || 0) + 1;
     const { error } = await supabase.from('students').update({ prayed_count: newCount }).eq('id', student.id);
@@ -184,7 +192,7 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
             <Plus size={14} className="mr-1" /> 글쓰기
           </button>
         )}
-        {isAdmin && communityTab === 'duties' && !editDutyMode && (
+        {communityTab === 'duties' && !editDutyMode && (
           <button onClick={startEditDuties} className="bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center shadow-sm hover:bg-emerald-600">
             <Edit size={14} className="mr-1" /> 순서 수정
           </button>
@@ -200,7 +208,6 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
         <button onClick={() => setCommunityTab('notice')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${communityTab === 'notice' ? 'bg-white text-emerald-600 shadow-sm' : 'text-stone-500'}`}>공지사항</button>
         <button onClick={() => setCommunityTab('material')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${communityTab === 'material' ? 'bg-white text-emerald-600 shadow-sm' : 'text-stone-500'}`}>자료실</button>
         <button onClick={() => setCommunityTab('duties')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${communityTab === 'duties' ? 'bg-white text-emerald-600 shadow-sm' : 'text-stone-500'}`}>예배순서</button>
-        {/* ⭐ 새로운 기도나눔 탭 추가 */}
         <button onClick={() => setCommunityTab('prayer')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${communityTab === 'prayer' ? 'bg-white text-emerald-600 shadow-sm' : 'text-stone-500'}`}>기도나눔</button>
       </div>
 
@@ -246,7 +253,6 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
         </div>
       )}
 
-      {/* ⭐ 새로 추가된 '기도나눔' 내용 출력 영역 */}
       {communityTab === 'prayer' && (
         <div className="space-y-4 pb-20 animate-in fade-in duration-300">
           <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
@@ -305,7 +311,8 @@ export default function Community({ userRole, currentUser, posts, setPosts, duti
               <tbody>
                 <tr>
                   {sundays.map((sun, i) => {
-                    const dateStr = sun.toISOString().split('T')[0];
+                    // ⭐ 시차 문제 해결: toISOString 대신 getLocalYYYYMMDD 사용
+                    const dateStr = getLocalYYYYMMDD(sun);
                     const duty = duties.find(d => d.duty_date === dateStr);
                     return (
                       <td key={i} className="p-2 border border-stone-200 text-xs text-stone-600 align-top h-24">

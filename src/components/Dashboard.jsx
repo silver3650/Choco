@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronRight, CalendarCheck, Users, Clock, AlertCircle, Phone, MessageCircle, FileText, BarChart2 } from 'lucide-react';
 
 export default function Dashboard({ userRole, currentUser, students, allStudents, attendance, sundayAttendance, sundayDate, teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile }) {
   const [statPeriod, setStatPeriod] = useState('weekly'); // 'weekly', 'monthly', 'custom'
+  
+  // ⭐ 그래프 가로 스크롤을 항상 우측(최신)으로 맞추기 위한 Ref
+  const chartScrollRef = useRef(null);
   
   // ⭐ 기간 지정 필터링을 위한 상태 (기본값: 한 달 전 ~ 오늘)
   const [customStart, setCustomStart] = useState(() => {
@@ -33,6 +36,14 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
 
   const absentStudents = students.filter(s => sundayAttendance && sundayAttendance[s.id] === '결석');
   const consecutiveAbsentees = students.filter(s => s.consecutiveAbsences >= 3);
+
+  // ⭐ 3일 이내에 작성된 새 글인지 확인하는 함수
+  const isNewPost = (dateStr) => {
+    if (!dateStr) return false;
+    const postDate = new Date(dateStr);
+    const diffDays = (today - postDate) / (1000 * 60 * 60 * 24);
+    return diffDays <= 3;
+  };
 
   // 초강력 생년월일 분석기
   const getMonthFromBirth = (dateStr) => {
@@ -87,13 +98,16 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
     window.location.href = `sms:${phone}`;
   };
 
-  const recentNotices = posts.filter(p => p.type === 'notice').slice(0, 2);
+  // ⭐ [수정됨] 공지사항뿐만 아니라 자료실, 기도나눔 게시글도 포함하여 최신 3개를 가져옵니다.
+  const recentPosts = posts
+    .filter(p => ['notice', 'material', 'prayer'].includes(p.type))
+    .slice(0, 3);
+    
   const currentMonthStr = currentActualMonth + "월";
   const myDuties = duties.filter(duty => duty.month === currentMonthStr && (duty.leader === currentUser?.name || duty.prayer === currentUser?.name));
 
-  // ⭐ [수정됨] 주일(일요일) 기준 정확한 주차 계산 로직 (해당 월의 몇 번째 일요일인지 카운트)
+  // 주일(일요일) 기준 정확한 주차 계산 로직
   const getWeekOfMonth = (date) => {
-    // date는 항상 일요일이 전달되므로, 날짜-1을 7로 나눈 몫에 1을 더하면 무조건 N번째 주일이 나옵니다.
     return Math.floor((date.getDate() - 1) / 7) + 1;
   };
 
@@ -114,7 +128,7 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
     return labels;
   };
 
-  // ⭐ [추가됨] 기간 지정 필터링용 일요일 리스트 추출
+  // 기간 지정 필터링용 일요일 리스트 추출
   const getCustomSundaysLabels = (startStr, endStr) => {
     const labels = [];
     if (!startStr || !endStr) return labels;
@@ -122,12 +136,11 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
     const current = new Date(startStr);
     const end = new Date(endStr);
     
-    // 시작일을 그 주의 일요일로 맞춤 (일요일이 아니면 다음 일요일로)
     if (current.getDay() !== 0) {
         current.setDate(current.getDate() + (7 - current.getDay()));
     }
     
-    let safety = 0; // 무한루프 방지
+    let safety = 0; 
     while (current <= end && safety < 52) { 
         const month = current.getMonth() + 1;
         const date = current.getDate();
@@ -152,7 +165,6 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
     const variation = [1.1, 0.9, 1.05, 0.95, 1.0];
     
     return labels.map((l, index) => {
-      // 주별 차트의 가장 오른쪽(최근) 값은 언제나 실제 출석 데이터를 대입
       if (statPeriod === 'weekly' && index === labels.length - 1) {
         return { label: l.weekStr, subLabel: l.dateStr, present: presentCount, total: totalCount };
       }
@@ -175,15 +187,22 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
   
   const chartHeight = 125; 
   const chartWidth = Math.max(380, statsData.length * 70); 
-  const paddingX = 40; 
+  const paddingLeft = 40; 
+  const paddingRight = 50; 
   const paddingY = 28; 
-  const innerWidth = chartWidth - paddingX * 2;
+  const innerWidth = chartWidth - paddingLeft - paddingRight;
   const innerHeight = chartHeight - paddingY * 2;
   const maxVal = Math.max(totalCount, 10); 
-  const getX = (index) => paddingX + (index * (innerWidth / (statsData.length - 1 || 1)));
+  const getX = (index) => paddingLeft + (index * (innerWidth / (statsData.length - 1 || 1)));
   const getY = (val) => chartHeight - paddingY - ((val / maxVal) * innerHeight);
   const presentPoints = statsData.map((d, i) => `${getX(i)},${getY(d.present)}`).join(' ');
   const absentPoints = statsData.map((d, i) => `${getX(i)},${getY(d.total - d.present)}`).join(' ');
+
+  useEffect(() => {
+    if (chartScrollRef.current) {
+      chartScrollRef.current.scrollLeft = chartScrollRef.current.scrollWidth;
+    }
+  }, [statsData, statPeriod]);
 
   return (
     <div className="p-4 space-y-5">
@@ -237,7 +256,6 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
            </div>
         </div>
 
-        {/* ⭐ 기간 지정용 UI 표시 */}
         {statPeriod === 'custom' && (
           <div className="flex items-center space-x-2 bg-stone-50 p-2 rounded-xl mb-3 border border-stone-100 animate-in fade-in zoom-in-95 duration-200">
             <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="flex-1 bg-white border border-stone-200 rounded-lg p-1.5 text-xs text-stone-600 font-bold focus:outline-none focus:ring-1 focus:ring-emerald-400" />
@@ -254,11 +272,14 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
           {statsData.length === 0 ? (
             <div className="flex items-center justify-center h-24 text-xs text-stone-400">지정된 기간 내에 해당하는 주일이 없습니다.</div>
           ) : (
-            <div className="overflow-x-auto hide-scrollbar w-full pb-2">
+            <div 
+              ref={chartScrollRef} 
+              className="overflow-x-auto hide-scrollbar w-full pb-2 scroll-smooth"
+            >
               <svg width={chartWidth} height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="min-w-max" style={{ width: chartWidth }}>
-                <line x1={paddingX} y1={getY(maxVal)} x2={chartWidth - paddingX} y2={getY(maxVal)} stroke="#e7e5e4" strokeDasharray="2 2" />
-                <line x1={paddingX} y1={getY(maxVal/2)} x2={chartWidth - paddingX} y2={getY(maxVal/2)} stroke="#e7e5e4" strokeDasharray="2 2" />
-                <line x1={paddingX} y1={getY(0)} x2={chartWidth - paddingX} y2={getY(0)} stroke="#e7e5e4" />
+                <line x1={paddingLeft} y1={getY(maxVal)} x2={chartWidth - paddingRight} y2={getY(maxVal)} stroke="#e7e5e4" strokeDasharray="2 2" />
+                <line x1={paddingLeft} y1={getY(maxVal/2)} x2={chartWidth - paddingRight} y2={getY(maxVal/2)} stroke="#e7e5e4" strokeDasharray="2 2" />
+                <line x1={paddingLeft} y1={getY(0)} x2={chartWidth - paddingRight} y2={getY(0)} stroke="#e7e5e4" />
                 <polyline points={presentPoints} fill="none" stroke="#10b981" strokeWidth="2.5" />
                 <polyline points={absentPoints} fill="none" stroke="#fb7185" strokeWidth="1.5" strokeDasharray="3 2" />
                 {statsData.map((d, i) => {
@@ -364,15 +385,28 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
         </div>
       </div>
 
+      {/* ⭐ 최신 게시글 섹션 (기존: 최신 공지사항) */}
       <div>
         <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-stone-800 text-sm flex items-center"><AlertCircle size={16} className="mr-1.5 text-stone-400" /> 최신 공지사항</h3>
+          <h3 className="font-bold text-stone-800 text-sm flex items-center"><AlertCircle size={16} className="mr-1.5 text-stone-400" /> 최신 게시글</h3>
           <button onClick={() => { setCurrentTab('community'); setCommunityTab('notice'); }} className="text-xs text-stone-400 hover:text-stone-600 flex items-center">더보기 <ChevronRight size={14} /></button>
         </div>
         <div className="space-y-2">
-          {recentNotices.length > 0 ? recentNotices.map(post => (
-            <div key={post.id} className="bg-white p-3.5 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center"><span className="text-sm font-bold text-stone-700 truncate mr-4">{post.title}</span><span className="text-[10px] text-stone-400 whitespace-nowrap">{post.date.substring(5)}</span></div>
-          )) : <p className="text-xs text-stone-400 text-center py-4 bg-white rounded-xl border border-stone-100">등록된 공지사항이 없습니다.</p>}
+          {recentPosts.length > 0 ? recentPosts.map(post => (
+            <div key={post.id} className="bg-white p-3.5 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center">
+              <span className="text-sm font-bold text-stone-700 truncate mr-4 flex items-center">
+                {/* ⭐ 게시글 종류 뱃지 표시 */}
+                <span className="text-[10px] bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded font-bold mr-2 whitespace-nowrap">
+                  {post.type === 'notice' ? '공지' : post.type === 'material' ? '자료' : post.type === 'prayer' ? '기도' : '게시글'}
+                </span>
+                {post.title}
+                {isNewPost(post.date || post.created_at) && (
+                  <span className="ml-1.5 text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded-full font-bold shadow-sm">N</span>
+                )}
+              </span>
+              <span className="text-[10px] text-stone-400 whitespace-nowrap">{post.date.substring(5)}</span>
+            </div>
+          )) : <p className="text-xs text-stone-400 text-center py-4 bg-white rounded-xl border border-stone-100">등록된 게시글이 없습니다.</p>}
         </div>
       </div>
     </div>
