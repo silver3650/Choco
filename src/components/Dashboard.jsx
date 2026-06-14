@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronRight, CalendarCheck, Users, Clock, AlertCircle, Phone, MessageCircle, FileText, BarChart2 } from 'lucide-react';
+import { supabase } from '../supabase'; // ⭐ DB 조회를 위해 추가
 
 export default function Dashboard({ userRole, currentUser, students, allStudents, attendance, sundayAttendance, sundayDate, teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile, setPostModal }) {
   const [statPeriod, setStatPeriod] = useState('weekly'); // 'weekly', 'monthly', 'custom'
   
-  // ⭐ 그래프 가로 스크롤을 항상 우측(최신)으로 맞추기 위한 Ref
-  const chartScrollRef = useRef(null);
+  // ⭐ 실제 전체 출석 데이터를 담을 상태
+  const [attHistory, setAttHistory] = useState([]);
   
-  // ⭐ 기간 지정 필터링을 위한 상태 (기본값: 한 달 전 ~ 오늘)
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
@@ -17,13 +17,9 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
     return new Date().toISOString().split('T')[0];
   });
   
-  // 생일자 조회용 '월' 상태 (기본값: 접속한 시점의 현재 월)
   const currentActualMonth = new Date().getMonth() + 1;
   const [selectedMonth, setSelectedMonth] = useState(currentActualMonth);
-  
-  // 출석 통계 기준을 위해 현재 날짜 계산
   const today = new Date();
-  
   const isTeacher = userRole === '교사';
   
   const totalCount = students.length;
@@ -37,7 +33,22 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
   const absentStudents = students.filter(s => sundayAttendance && sundayAttendance[s.id] === '결석');
   const consecutiveAbsentees = students.filter(s => s.consecutiveAbsences >= 3);
 
-  // ⭐ 3일 이내에 작성된 새 글인지 확인하는 함수
+  // ⭐ 대시보드가 열릴 때 전체 출석 데이터(attHistory)를 DB에서 불러오는 로직 추가
+  useEffect(() => {
+    if (students.length > 0) {
+      const fetchHistory = async () => {
+        const studentIds = students.map(s => s.id);
+        const { data, error } = await supabase.from('attendance')
+          .select('attendance_date, status, student_id')
+          .in('student_id', studentIds);
+        if (!error && data) {
+          setAttHistory(data);
+        }
+      };
+      fetchHistory();
+    }
+  }, [students]);
+
   const isNewPost = (dateStr) => {
     if (!dateStr) return false;
     const postDate = new Date(dateStr);
@@ -45,7 +56,6 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
     return diffDays <= 3;
   };
 
-  // 초강력 생년월일 분석기
   const getMonthFromBirth = (dateStr) => {
     if (!dateStr) return -1;
     if (String(dateStr).includes('월')) {
@@ -62,7 +72,6 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
     return -1;
   };
 
-  // 생일 표시 포맷팅
   const formatBirth = (dateStr) => {
     if (!dateStr) return '';
     const month = getMonthFromBirth(dateStr);
@@ -98,112 +107,103 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
     window.location.href = `sms:${phone}`;
   };
 
-  // ⭐ [수정됨] 공지사항뿐만 아니라 자료실, 기도나눔 게시글도 포함하여 최신 3개를 가져옵니다.
   const recentPosts = posts
     .filter(p => ['notice', 'material', 'prayer'].includes(p.type))
-    .sort((a, b) => b.id - a.id) // ⭐ 이 줄을 추가하여 최신 글(번호가 높은 글)이 위로 오게 정렬합니다.
+    .sort((a, b) => b.id - a.id)
     .slice(0, 3);
     
   const currentMonthStr = currentActualMonth + "월";
   const myDuties = duties.filter(duty => duty.month === currentMonthStr && (duty.leader === currentUser?.name || duty.prayer === currentUser?.name));
 
-  // 주일(일요일) 기준 정확한 주차 계산 로직
+  const getLocalYYYYMMDD = (d) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const getWeekOfMonth = (date) => {
     return Math.floor((date.getDate() - 1) / 7) + 1;
   };
 
-  // 최근 n개의 주일(일요일) 추출
-  const getRecentSundaysLabels = (count) => {
-    const labels = [];
-    let current = new Date(today);
-    if (current.getDay() !== 0) current.setDate(current.getDate() - current.getDay());
-    
-    for (let i = count - 1; i >= 0; i--) {
-      const pastSunday = new Date(current);
-      pastSunday.setDate(current.getDate() - (i * 7));
-      const month = pastSunday.getMonth() + 1;
-      const date = pastSunday.getDate();
-      const weekNum = getWeekOfMonth(pastSunday);
-      labels.push({ weekStr: `${month}월${weekNum}주`, dateStr: `(${month}/${date})` });
-    }
-    return labels;
-  };
-
-  // 기간 지정 필터링용 일요일 리스트 추출
-  const getCustomSundaysLabels = (startStr, endStr) => {
-    const labels = [];
-    if (!startStr || !endStr) return labels;
-    
-    const current = new Date(startStr);
-    const end = new Date(endStr);
-    
-    if (current.getDay() !== 0) {
-        current.setDate(current.getDate() + (7 - current.getDay()));
-    }
-    
-    let safety = 0; 
-    while (current <= end && safety < 52) { 
-        const month = current.getMonth() + 1;
-        const date = current.getDate();
-        const weekNum = getWeekOfMonth(current);
-        labels.push({ weekStr: `${month}월${weekNum}주`, dateStr: `(${month}/${date})` });
-        current.setDate(current.getDate() + 7);
-        safety++;
-    }
-    return labels;
-  };
-
-  const generateDynamicStats = () => {
-    let labels = [];
-    if (statPeriod === 'weekly') labels = getRecentSundaysLabels(5);
-    else if (statPeriod === 'custom') labels = getCustomSundaysLabels(customStart, customEnd);
-    
-    if (totalCount === 0 || labels.length === 0) {
-      return labels.map(l => ({ label: l.weekStr, subLabel: l.dateStr, present: 0, total: 0 }));
-    }
-    
-    const rate = presentCount / totalCount;
-    const variation = [1.1, 0.9, 1.05, 0.95, 1.0];
-    
-    return labels.map((l, index) => {
-      if (statPeriod === 'weekly' && index === labels.length - 1) {
-        return { label: l.weekStr, subLabel: l.dateStr, present: presentCount, total: totalCount };
+  // ⭐ 더미 데이터 생성을 완전히 삭제하고 실제 데이터 기반으로 통계를 계산합니다.
+  const statsData = (() => {
+    // 월별 통계
+    if (statPeriod === 'monthly') {
+      let monthStats = [];
+      for (let i = 3; i >= 0; i--) {
+        const targetDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const targetMonth = targetDate.getMonth() + 1;
+        const targetYear = targetDate.getFullYear();
+        
+        const recordsInMonth = attHistory.filter(r => {
+          if (!r.attendance_date) return false;
+          const parts = r.attendance_date.split('-');
+          return parseInt(parts[0], 10) === targetYear && parseInt(parts[1], 10) === targetMonth;
+        });
+        
+        const distinctDates = [...new Set(recordsInMonth.map(r => r.attendance_date))];
+        let totalPresentCount = 0;
+        distinctDates.forEach(date => {
+           totalPresentCount += recordsInMonth.filter(r => r.attendance_date === date && r.status === '출석').length;
+        });
+        
+        const avgPresent = distinctDates.length > 0 ? Math.round(totalPresentCount / distinctDates.length) : 0;
+        monthStats.push({ label: i === 0 ? '이번 달' : `${i}달 전`, subLabel: '', present: avgPresent, total: totalCount });
       }
-      
-      const mod = variation[index % variation.length];
-      const simulatedPresent = Math.min(totalCount, Math.max(0, Math.floor(totalCount * (rate > 0 ? rate * mod : 0.9))));
-      return { label: l.weekStr, subLabel: l.dateStr, present: simulatedPresent, total: totalCount };
+      return monthStats; // 4개월 치
+    } 
+    
+    // 주별 & 기간별 통계 (실제 데이터 계산)
+    let dates = [];
+    if (statPeriod === 'weekly') {
+      let current = new Date(today);
+      if (current.getDay() !== 0) current.setDate(current.getDate() - current.getDay());
+      // 최근 5주 (count: 5)
+      for (let i = 4; i >= 0; i--) {
+        const d = new Date(current); d.setDate(current.getDate() - (i * 7)); dates.push(d);
+      }
+    } else if (statPeriod === 'custom') {
+      const start = new Date(customStart); const end = new Date(customEnd);
+      if (start.getDay() !== 0) start.setDate(start.getDate() + (7 - start.getDay()));
+      let current = new Date(start); let safety = 0;
+      while(current <= end && safety < 52) {
+          dates.push(new Date(current)); current.setDate(current.getDate() + 7); safety++;
+      }
+    }
+
+    return dates.map(dateObj => {
+      const dateStr = getLocalYYYYMMDD(dateObj);
+      const month = dateObj.getMonth() + 1;
+      const dateNum = dateObj.getDate();
+      const weekNum = getWeekOfMonth(dateObj);
+      const records = attHistory.filter(r => r.attendance_date === dateStr);
+      const present = records.filter(r => r.status === '출석').length;
+      return {
+          label: `${month}월${weekNum}주`,
+          subLabel: `(${month}/${dateNum})`,
+          present: present,
+          total: totalCount // 현재 학생 수 기준
+      };
     });
-  };
-
-  const periodStats = generateDynamicStats();
-  const monthlyStats = [
-    { label: '3달 전', subLabel: '', present: Math.floor(totalCount * 0.85), total: totalCount },
-    { label: '2달 전', subLabel: '', present: Math.floor(totalCount * 0.90), total: totalCount },
-    { label: '1달 전', subLabel: '', present: Math.floor(totalCount * 0.80), total: totalCount },
-    { label: '이번 달', subLabel: '', present: Math.floor(periodStats.reduce((a, c) => a + c.present, 0) / (periodStats.length || 1)), total: totalCount },
-  ];
-
-  const statsData = statPeriod === 'monthly' ? monthlyStats : periodStats;
+  })();
   
+  // ⭐ 그래프 화면 꽉 채우기 (viewBox 활용 & 고정픽셀 제거)
   const chartHeight = 125; 
-  const chartWidth = Math.max(380, statsData.length * 70); 
-  const paddingLeft = 40; 
-  const paddingRight = 50; 
+  // 실제 픽셀 너비가 아닌 viewBox의 가상 논리 너비
+  // 5주 치일 때 340 정도가 적당하며, 기간지정으로 길어지면 스크롤이 되도록 유동적으로 설정
+  const viewBoxWidth = Math.max(340, statsData.length * 68); 
+  const paddingLeft = 20; // 좁은 화면을 위해 좌우 여백 축소
+  const paddingRight = 20; 
   const paddingY = 28; 
-  const innerWidth = chartWidth - paddingLeft - paddingRight;
+  const innerWidth = viewBoxWidth - paddingLeft - paddingRight;
   const innerHeight = chartHeight - paddingY * 2;
   const maxVal = Math.max(totalCount, 10); 
-  const getX = (index) => paddingLeft + (index * (innerWidth / (statsData.length - 1 || 1)));
+  const getX = (index) => paddingLeft + (index * (innerWidth / (Math.max(statsData.length - 1, 1))));
   const getY = (val) => chartHeight - paddingY - ((val / maxVal) * innerHeight);
+  
   const presentPoints = statsData.map((d, i) => `${getX(i)},${getY(d.present)}`).join(' ');
   const absentPoints = statsData.map((d, i) => `${getX(i)},${getY(d.total - d.present)}`).join(' ');
-
-  useEffect(() => {
-    if (chartScrollRef.current) {
-      chartScrollRef.current.scrollLeft = chartScrollRef.current.scrollWidth;
-    }
-  }, [statsData, statPeriod]);
 
   return (
     <div className="p-4 space-y-5">
@@ -273,27 +273,25 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
           {statsData.length === 0 ? (
             <div className="flex items-center justify-center h-24 text-xs text-stone-400">지정된 기간 내에 해당하는 주일이 없습니다.</div>
           ) : (
-            <div 
-              ref={chartScrollRef} 
-              className="overflow-x-auto hide-scrollbar w-full pb-2 scroll-smooth"
-            >
-              <svg width={chartWidth} height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="min-w-max" style={{ width: chartWidth }}>
-                <line x1={paddingLeft} y1={getY(maxVal)} x2={chartWidth - paddingRight} y2={getY(maxVal)} stroke="#e7e5e4" strokeDasharray="2 2" />
-                <line x1={paddingLeft} y1={getY(maxVal/2)} x2={chartWidth - paddingRight} y2={getY(maxVal/2)} stroke="#e7e5e4" strokeDasharray="2 2" />
-                <line x1={paddingLeft} y1={getY(0)} x2={chartWidth - paddingRight} y2={getY(0)} stroke="#e7e5e4" />
+            <div className="w-full pb-2 overflow-x-auto hide-scrollbar scroll-smooth">
+              {/* ⭐ viewBox를 사용해 컨테이너 크기(100%)에 딱 맞춰 비율이 조정되도록 변경 */}
+              <svg width="100%" height={chartHeight} viewBox={`0 0 ${viewBoxWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet" className="w-full min-w-max">
+                <line x1={paddingLeft} y1={getY(maxVal)} x2={viewBoxWidth - paddingRight} y2={getY(maxVal)} stroke="#e7e5e4" strokeDasharray="2 2" />
+                <line x1={paddingLeft} y1={getY(maxVal/2)} x2={viewBoxWidth - paddingRight} y2={getY(maxVal/2)} stroke="#e7e5e4" strokeDasharray="2 2" />
+                <line x1={paddingLeft} y1={getY(0)} x2={viewBoxWidth - paddingRight} y2={getY(0)} stroke="#e7e5e4" />
                 <polyline points={presentPoints} fill="none" stroke="#10b981" strokeWidth="2.5" />
                 <polyline points={absentPoints} fill="none" stroke="#fb7185" strokeWidth="1.5" strokeDasharray="3 2" />
                 {statsData.map((d, i) => {
                   const px = getX(i); const py = getY(d.present); const ay = getY(d.total - d.present); const pct = totalCount === 0 ? 0 : Math.round((d.present / d.total) * 100);
                   return (
                     <g key={i}>
-                      <text x={px} y={chartHeight - 16} textAnchor="middle" fontSize="9" fill="#78716c" fontWeight="bold" letterSpacing="-0.5px">{d.label}</text>
-                      {d.subLabel && <text x={px} y={chartHeight - 5} textAnchor="middle" fontSize="8" fill="#a8a29e" letterSpacing="-0.5px">{d.subLabel}</text>}
+                      <text x={px} y={chartHeight - 16} textAnchor="middle" fontSize="10" fill="#78716c" fontWeight="bold" letterSpacing="-0.5px">{d.label}</text>
+                      {d.subLabel && <text x={px} y={chartHeight - 5} textAnchor="middle" fontSize="9" fill="#a8a29e" letterSpacing="-0.5px">{d.subLabel}</text>}
                       
                       <circle cx={px} cy={ay} r="3" fill="#fff" stroke="#fb7185" strokeWidth="1.5" />
-                      <text x={px} y={ay + 12} textAnchor="middle" fontSize="9" fill="#e11d48" fontWeight="bold">{d.total - d.present}명</text>
+                      <text x={px} y={ay + 12} textAnchor="middle" fontSize="10" fill="#e11d48" fontWeight="bold">{d.total - d.present}명</text>
                       <circle cx={px} cy={py} r="3.5" fill="#fff" stroke="#10b981" strokeWidth="2" />
-                      <text x={px} y={py - 12} textAnchor="middle" fontSize="10" fill="#047857" fontWeight="bold">{d.present}명</text>
+                      <text x={px} y={py - 12} textAnchor="middle" fontSize="11" fill="#047857" fontWeight="bold">{d.present}명</text>
                       <text x={px} y={py - 4} textAnchor="middle" fontSize="8" fill="#34d399">({pct}%)</text>
                     </g>
                   );
@@ -386,7 +384,6 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
         </div>
       </div>
 
-      {/* ⭐ 최신 게시글 섹션 (기존: 최신 공지사항) */}
       <div>
         <div className="flex justify-between items-center mb-3">
           <h3 className="font-bold text-stone-800 text-sm flex items-center"><AlertCircle size={16} className="mr-1.5 text-stone-400" /> 최신 게시글</h3>
@@ -400,7 +397,6 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
               className="bg-white p-3.5 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center cursor-pointer hover:border-emerald-300 transition-colors"
             >
               <span className="text-sm font-bold text-stone-700 truncate mr-4 flex items-center">
-                {/* ⭐ 게시글 종류 뱃지 표시 */}
                 <span className="text-[10px] bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded font-bold mr-2 whitespace-nowrap">
                   {post.type === 'notice' ? '공지' : post.type === 'material' ? '자료' : post.type === 'prayer' ? '기도' : '게시글'}
                 </span>

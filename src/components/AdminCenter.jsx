@@ -23,20 +23,15 @@ export default function AdminCenter({
   });
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0]);
 
-  // ⭐ [핵심 수정] 학생들의 반(uniqueGroups)뿐만 아니라, 교사들의 반 이름도 전부 가져와서 합칩니다.
-  // 이렇게 해야 학생이 아직 없는 빈 반(예: 새로 만든 섬김반)도 화면에서 사라지지 않습니다.
   const teacherGroups = teachers.map(t => t.class_name || t.group).filter(Boolean);
   const combinedGroups = [...uniqueGroups, ...teacherGroups, ...addedGroups];
 
-  // ⭐ [정렬] 반 이름: '전체'를 맨 앞에 두고, 나머지는 가나다순으로 정렬
   const sortedGroups = ['전체', ...Array.from(new Set(combinedGroups))
-    .filter(g => g !== '전체' && g !== '미정') // '미정' 등 불필요한 값 필터링
+    .filter(g => g !== '전체' && g !== '미정')
     .sort((a, b) => a.localeCompare(b, 'ko-KR'))];
 
-  // ⭐ [정렬] 교사 목록: 가나다순 정렬
   const sortedTeachers = [...teachers].sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'));
 
-  // ⭐ [정렬] 학생 목록: 학년순 정렬 (학년이 없으면 이름 가나다순)
   const gradeOrder = ['유아', '유치', '초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3', '청년'];
   const sortedStudents = [...students].sort((a, b) => {
     const idxA = gradeOrder.indexOf(a.grade);
@@ -96,7 +91,7 @@ export default function AdminCenter({
         const avgPresent = distinctDates.length > 0 ? Math.round(totalPresent / distinctDates.length) : 0;
         monthStats.push({ label: i === 0 ? '이번 달' : `${i}달 전`, subLabel: '', present: avgPresent, total: students.length });
       }
-      return monthStats;
+      return monthStats.reverse(); // 월별 데이터도 과거순으로 정렬 (선택 사항)
     } 
     
     let dates = [];
@@ -131,14 +126,15 @@ export default function AdminCenter({
     });
   })();
   
+  // ⭐ 그래프 화면 맞춤 최적화 로직 (고정 너비 제거 및 반응형 viewBox 도입)
   const chartHeight = 190; 
-  const chartWidth = Math.max(340, statsData.length * 60); 
-  const paddingX = 30;
+  const viewBoxWidth = 340; // 내부 논리적 좌표계 너비 (실제 픽셀 너비 아님)
+  const paddingX = 25; // 좌우 여백을 약간 줄여서 타이트하게 배치
   const paddingY = 45; 
-  const innerWidth = chartWidth - paddingX * 2;
+  const innerWidth = viewBoxWidth - paddingX * 2;
   const innerHeight = chartHeight - paddingY * 2;
   const maxVal = Math.max(...statsData.map(d => d.total), students.length, 10); 
-  const getX = (index) => paddingX + (index * (innerWidth / (statsData.length - 1 || 1)));
+  const getX = (index) => paddingX + (index * (innerWidth / (Math.max(statsData.length - 1, 1))));
   const getY = (val) => chartHeight - paddingY - ((val / maxVal) * innerHeight);
 
   const presentPoints = statsData.map((d, i) => `${getX(i)},${getY(d.present)}`).join(' ');
@@ -303,11 +299,12 @@ export default function AdminCenter({
             {statsData.length === 0 ? (
               <div className="flex items-center justify-center h-24 text-xs text-stone-400">데이터가 없습니다.</div>
             ) : (
-              <div className="overflow-x-auto hide-scrollbar w-full pb-2">
-                <svg width={chartWidth} height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="min-w-max" style={{ width: chartWidth }}>
-                  <line x1={paddingX} y1={getY(maxVal)} x2={chartWidth - paddingX} y2={getY(maxVal)} stroke="#e7e5e4" strokeDasharray="3 3" />
-                  <line x1={paddingX} y1={getY(maxVal/2)} x2={chartWidth - paddingX} y2={getY(maxVal/2)} stroke="#e7e5e4" strokeDasharray="3 3" />
-                  <line x1={paddingX} y1={getY(0)} x2={chartWidth - paddingX} y2={getY(0)} stroke="#e7e5e4" />
+              <div className="w-full pb-2">
+                {/* ⭐ SVG 렌더링 부분을 100% 꽉 차도록 변경했습니다. */}
+                <svg width="100%" height={chartHeight} viewBox={`0 0 ${viewBoxWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet" className="w-full">
+                  <line x1={paddingX} y1={getY(maxVal)} x2={viewBoxWidth - paddingX} y2={getY(maxVal)} stroke="#e7e5e4" strokeDasharray="3 3" />
+                  <line x1={paddingX} y1={getY(maxVal/2)} x2={viewBoxWidth - paddingX} y2={getY(maxVal/2)} stroke="#e7e5e4" strokeDasharray="3 3" />
+                  <line x1={paddingX} y1={getY(0)} x2={viewBoxWidth - paddingX} y2={getY(0)} stroke="#e7e5e4" />
                   <polyline points={presentPoints} fill="none" stroke="#10b981" strokeWidth="3" />
                   <polyline points={absentPoints} fill="none" stroke="#fb7185" strokeWidth="2" strokeDasharray="4 2" />
                   {statsData.map((d, i) => {
