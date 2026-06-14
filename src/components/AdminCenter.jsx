@@ -10,7 +10,11 @@ export default function AdminCenter({
   const [statPeriod, setStatPeriod] = useState('weekly');
   const [batchGroup, setBatchGroup] = useState('1반');
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  
+  // ⭐ 일괄 배정 다중 필터 상태
   const [batchFilterGroup, setBatchFilterGroup] = useState('전체');
+  const [batchFilterGrade, setBatchFilterGrade] = useState('전체');
+  const [batchFilterGender, setBatchFilterGender] = useState('전체');
   
   const [newGroupName, setNewGroupName] = useState('');
   const [addedGroups, setAddedGroups] = useState([]); 
@@ -33,6 +37,13 @@ export default function AdminCenter({
   const sortedTeachers = [...teachers].sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'));
 
   const gradeOrder = ['유아', '유치', '초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3', '청년'];
+  
+  // ⭐ DB에 있는 실제 학년들만 필터 드롭다운에 보여주기 위한 로직
+  const allAvailableGrades = [
+    ...gradeOrder.filter(grade => students.some(s => s.grade === grade)), 
+    ...Array.from(new Set(students.map(s => s.grade))).filter(g => g && !gradeOrder.includes(g))
+  ];
+
   const sortedStudents = [...students].sort((a, b) => {
     const idxA = gradeOrder.indexOf(a.grade);
     const idxB = gradeOrder.indexOf(b.grade);
@@ -41,6 +52,13 @@ export default function AdminCenter({
     if (idxB === -1) return -1;
     return idxA - idxB;
   });
+
+  // ⭐ 현재 필터 조건에 맞는 학생들만 추려내는 로직
+  const filteredBatchStudents = sortedStudents.filter(s => 
+    (batchFilterGroup === '전체' || s.group === batchFilterGroup) &&
+    (batchFilterGrade === '전체' || s.grade === batchFilterGrade) &&
+    (batchFilterGender === '전체' || s.gender === batchFilterGender)
+  );
 
   useEffect(() => {
     if (adminView === 'stats' && students.length > 0) {
@@ -91,7 +109,7 @@ export default function AdminCenter({
         const avgPresent = distinctDates.length > 0 ? Math.round(totalPresent / distinctDates.length) : 0;
         monthStats.push({ label: i === 0 ? '이번 달' : `${i}달 전`, subLabel: '', present: avgPresent, total: students.length });
       }
-      return monthStats.reverse(); // 월별 데이터도 과거순으로 정렬 (선택 사항)
+      return monthStats;
     } 
     
     let dates = [];
@@ -126,12 +144,11 @@ export default function AdminCenter({
     });
   })();
   
-  // ⭐ 그래프 화면 맞춤 최적화 로직 (고정 너비 제거 및 반응형 viewBox 도입)
   const chartHeight = 190; 
-  const viewBoxWidth = 340; // 내부 논리적 좌표계 너비 (실제 픽셀 너비 아님)
-  const paddingX = 25; // 좌우 여백을 약간 줄여서 타이트하게 배치
+  const chartWidth = Math.max(340, statsData.length * 60); 
+  const paddingX = 30;
   const paddingY = 45; 
-  const innerWidth = viewBoxWidth - paddingX * 2;
+  const innerWidth = chartWidth - paddingX * 2;
   const innerHeight = chartHeight - paddingY * 2;
   const maxVal = Math.max(...statsData.map(d => d.total), students.length, 10); 
   const getX = (index) => paddingX + (index * (innerWidth / (Math.max(statsData.length - 1, 1))));
@@ -299,12 +316,11 @@ export default function AdminCenter({
             {statsData.length === 0 ? (
               <div className="flex items-center justify-center h-24 text-xs text-stone-400">데이터가 없습니다.</div>
             ) : (
-              <div className="w-full pb-2">
-                {/* ⭐ SVG 렌더링 부분을 100% 꽉 차도록 변경했습니다. */}
-                <svg width="100%" height={chartHeight} viewBox={`0 0 ${viewBoxWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet" className="w-full">
-                  <line x1={paddingX} y1={getY(maxVal)} x2={viewBoxWidth - paddingX} y2={getY(maxVal)} stroke="#e7e5e4" strokeDasharray="3 3" />
-                  <line x1={paddingX} y1={getY(maxVal/2)} x2={viewBoxWidth - paddingX} y2={getY(maxVal/2)} stroke="#e7e5e4" strokeDasharray="3 3" />
-                  <line x1={paddingX} y1={getY(0)} x2={viewBoxWidth - paddingX} y2={getY(0)} stroke="#e7e5e4" />
+              <div className="w-full pb-2 overflow-x-auto hide-scrollbar scroll-smooth">
+                <svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet" className="w-full min-w-max">
+                  <line x1={paddingX} y1={getY(maxVal)} x2={chartWidth - paddingX} y2={getY(maxVal)} stroke="#e7e5e4" strokeDasharray="3 3" />
+                  <line x1={paddingX} y1={getY(maxVal/2)} x2={chartWidth - paddingX} y2={getY(maxVal/2)} stroke="#e7e5e4" strokeDasharray="3 3" />
+                  <line x1={paddingX} y1={getY(0)} x2={chartWidth - paddingX} y2={getY(0)} stroke="#e7e5e4" />
                   <polyline points={presentPoints} fill="none" stroke="#10b981" strokeWidth="3" />
                   <polyline points={absentPoints} fill="none" stroke="#fb7185" strokeWidth="2" strokeDasharray="4 2" />
                   {statsData.map((d, i) => {
@@ -337,23 +353,63 @@ export default function AdminCenter({
            </div>
 
            <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-100">
-             <div className="flex justify-between items-center mb-4">
-               <h3 className="font-bold text-stone-800 text-sm">학생 반 일괄 배정 관리</h3>
-               <select value={batchFilterGroup} onChange={(e) => setBatchFilterGroup(e.target.value)} className="text-xs font-bold bg-stone-50 border border-stone-200 rounded-lg p-1.5 text-stone-700">
-                 {sortedGroups.map(g => <option key={g} value={g}>{g === '전체' ? '전체 보기' : `${g} 보기`}</option>)}
-               </select>
+             {/* ⭐ 다중 필터 및 전체 선택 기능 적용 */}
+             <div className="flex flex-col space-y-3 mb-4">
+               <div className="flex justify-between items-center">
+                 <h3 className="font-bold text-stone-800 text-sm">학생 반 일괄 배정 관리</h3>
+                 <button 
+                   onClick={() => {
+                     const filteredIds = filteredBatchStudents.map(s => s.id);
+                     const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedStudentIds.includes(id));
+                     if (allSelected) {
+                       setSelectedStudentIds(prev => prev.filter(id => !filteredIds.includes(id)));
+                     } else {
+                       setSelectedStudentIds(prev => [...new Set([...prev, ...filteredIds])]);
+                     }
+                   }}
+                   className="text-[10px] bg-stone-100 text-stone-600 px-2 py-1 rounded-md font-bold hover:bg-stone-200 transition-colors shadow-sm"
+                 >
+                   현재 화면 전체 선택
+                 </button>
+               </div>
+               <div className="flex space-x-2">
+                 <select value={batchFilterGroup} onChange={(e) => setBatchFilterGroup(e.target.value)} className="flex-1 text-[11px] font-bold bg-stone-50 border border-stone-200 rounded-lg p-1.5 text-stone-700 focus:ring-1 focus:ring-emerald-400 outline-none">
+                   {sortedGroups.map(g => <option key={g} value={g}>{g === '전체' ? '모든 반' : `${g}`}</option>)}
+                 </select>
+                 <select value={batchFilterGrade} onChange={(e) => setBatchFilterGrade(e.target.value)} className="flex-1 text-[11px] font-bold bg-stone-50 border border-stone-200 rounded-lg p-1.5 text-stone-700 focus:ring-1 focus:ring-emerald-400 outline-none">
+                   <option value="전체">모든 학년</option>
+                   {allAvailableGrades.map(g => <option key={g} value={g}>{g}</option>)}
+                 </select>
+                 <select value={batchFilterGender} onChange={(e) => setBatchFilterGender(e.target.value)} className="flex-1 text-[11px] font-bold bg-stone-50 border border-stone-200 rounded-lg p-1.5 text-stone-700 focus:ring-1 focus:ring-emerald-400 outline-none">
+                   <option value="전체">모든 성별</option>
+                   <option value="남">남</option>
+                   <option value="여">여</option>
+                 </select>
+               </div>
              </div>
              
              {selectedStudentIds.length > 0 && (
                <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 mb-3 flex items-center justify-between"><span className="text-xs font-bold text-emerald-700">{selectedStudentIds.length}명 선택됨</span><div className="flex space-x-2"><select value={batchGroup} onChange={(e) => setBatchGroup(e.target.value)} className="text-xs font-bold border rounded-md py-1 px-2">{sortedGroups.filter(g => g !== '전체').map(g => <option key={g} value={g}>{g}</option>)}</select><button onClick={handleBatchGroupChange} className="bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-md">이동</button></div></div>
              )}
+             
              <div className="border border-stone-100 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
-               {sortedStudents.filter(s => batchFilterGroup === '전체' || s.group === batchFilterGroup).map(student => (
-                 <div key={`batch-${student.id}`} onClick={() => toggleStudentSelection(student.id)} className={`flex items-center p-3 border-b border-stone-100 cursor-pointer ${selectedStudentIds.includes(student.id) ? 'bg-emerald-50/50' : 'hover:bg-[#FFFCF9]'}`}>
-                   <div className={`w-4 h-4 rounded-sm border mr-3 flex items-center justify-center ${selectedStudentIds.includes(student.id) ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-stone-300'}`}>{selectedStudentIds.includes(student.id) && <Check size={12} className="text-white" />}</div>
-                   <div className="flex-1"><p className="text-sm font-bold text-stone-800">{student.name}</p><p className="text-[10px] text-stone-500">{student.grade || '학년 미상'} • 현재: <span className="font-bold text-sky-600">{student.group}</span></p></div>
-                 </div>
-               ))}
+               {filteredBatchStudents.length === 0 ? (
+                 <div className="p-4 text-center text-xs text-stone-400">조건에 맞는 학생이 없습니다.</div>
+               ) : (
+                 filteredBatchStudents.map(student => (
+                   <div key={`batch-${student.id}`} onClick={() => toggleStudentSelection(student.id)} className={`flex items-center p-3 border-b border-stone-100 cursor-pointer ${selectedStudentIds.includes(student.id) ? 'bg-emerald-50/50' : 'hover:bg-[#FFFCF9]'}`}>
+                     <div className={`w-4 h-4 rounded-sm border mr-3 flex items-center justify-center ${selectedStudentIds.includes(student.id) ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-stone-300'}`}>{selectedStudentIds.includes(student.id) && <Check size={12} className="text-white" />}</div>
+                     <div className="flex-1">
+                       <p className="text-sm font-bold text-stone-800">
+                         {student.name} {student.gender && <span className="text-[10px] text-stone-400 font-normal ml-0.5">({student.gender})</span>}
+                       </p>
+                       <p className="text-[10px] text-stone-500">
+                         {student.grade || '학년 미상'} • 현재: <span className="font-bold text-sky-600">{student.group}</span>
+                       </p>
+                     </div>
+                   </div>
+                 ))
+               )}
              </div>
            </div>
 
