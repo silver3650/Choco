@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronRight, CalendarCheck, Users, Clock, AlertCircle, Phone, MessageCircle, FileText, BarChart2 } from 'lucide-react';
-import { supabase } from '../supabase'; // ⭐ DB 조회를 위해 추가
+import { supabase } from '../supabase';
 
-export default function Dashboard({ userRole, currentUser, students, allStudents, attendance, sundayAttendance, sundayDate, teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile, setPostModal }) {
-  const [statPeriod, setStatPeriod] = useState('weekly'); // 'weekly', 'monthly', 'custom'
-  
-  // ⭐ 실제 전체 출석 데이터를 담을 상태
-  const [attHistory, setAttHistory] = useState([]);
+export default function Dashboard({ 
+  userRole, currentUser, students, allStudents, attendance, sundayAttendance, sundayDate, 
+  teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile, setPostModal 
+}) {
+  const [statPeriod, setStatPeriod] = useState('weekly'); 
+  const [localAttHistory, setLocalAttHistory] = useState([]); // ⭐ 대시보드 전용 출석 데이터 상태
   
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date();
@@ -20,9 +21,10 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
   const currentActualMonth = new Date().getMonth() + 1;
   const [selectedMonth, setSelectedMonth] = useState(currentActualMonth);
   const today = new Date();
-  const isTeacher = userRole === '교사';
   
-  const totalCount = students.length;
+  // App.jsx에서 students를 권한에 맞게 잘라서 넘겨주므로, 
+  // 교사면 '우리 반 학생수', 관리자면 '전체 학생수'가 자동으로 계산됩니다.
+  const totalCount = students.length; 
   const presentCount = students.filter(s => sundayAttendance && sundayAttendance[s.id] === '출석').length;
   const absentCount = totalCount - presentCount;
   const presentPercent = totalCount === 0 ? 0 : Math.round((presentCount / totalCount) * 100);
@@ -33,20 +35,23 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
   const absentStudents = students.filter(s => sundayAttendance && sundayAttendance[s.id] === '결석');
   const consecutiveAbsentees = students.filter(s => s.consecutiveAbsences >= 3);
 
-  // ⭐ 대시보드가 열릴 때 전체 출석 데이터(attHistory)를 DB에서 불러오는 로직 추가
+  // ⭐ 대시보드가 화면에 켜질 때마다 DB에서 최신 출석 데이터를 직접 불러옵니다.
   useEffect(() => {
-    if (students.length > 0) {
-      const fetchHistory = async () => {
-        const studentIds = students.map(s => s.id);
-        const { data, error } = await supabase.from('attendance')
-          .select('attendance_date, status, student_id')
-          .in('student_id', studentIds);
-        if (!error && data) {
-          setAttHistory(data);
-        }
-      };
-      fetchHistory();
-    }
+    const fetchDashboardHistory = async () => {
+      if (!students || students.length === 0) return;
+      
+      // 현재 화면에 표시되어야 할 학생들의 ID만 뽑아냅니다.
+      const studentIds = students.map(s => s.id);
+      
+      const { data, error } = await supabase.from('attendance')
+        .select('attendance_date, status, student_id')
+        .in('student_id', studentIds); // 교사면 우리 반만, 관리자면 전체 데이터만 쏙 빼옵니다.
+        
+      if (!error && data) {
+        setLocalAttHistory(data);
+      }
+    };
+    fetchDashboardHistory();
   }, [students]);
 
   const isNewPost = (dateStr) => {
@@ -90,7 +95,6 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
         else if (clean.length === 6) day = parseInt(clean.substring(4, 6), 10);
         else if (clean.length === 4) day = parseInt(clean.substring(2, 4), 10);
     }
-    
     return day !== -1 && !isNaN(day) ? `${month}/${day}` : `${month}월`;
   };
 
@@ -126,9 +130,11 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
     return Math.floor((date.getDate() - 1) / 7) + 1;
   };
 
-  // ⭐ 더미 데이터 생성을 완전히 삭제하고 실제 데이터 기반으로 통계를 계산합니다.
+  // ⭐ 오류가 원천 차단된 실제 데이터 기반 통계 로직
   const statsData = (() => {
-    // 월별 통계
+    const visibleStudentIds = students.map(s => String(s.id));
+    const relevantAttHistory = localAttHistory.filter(r => visibleStudentIds.includes(String(r.student_id)));
+
     if (statPeriod === 'monthly') {
       let monthStats = [];
       for (let i = 3; i >= 0; i--) {
@@ -136,7 +142,7 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
         const targetMonth = targetDate.getMonth() + 1;
         const targetYear = targetDate.getFullYear();
         
-        const recordsInMonth = attHistory.filter(r => {
+        const recordsInMonth = relevantAttHistory.filter(r => {
           if (!r.attendance_date) return false;
           const parts = r.attendance_date.split('-');
           return parseInt(parts[0], 10) === targetYear && parseInt(parts[1], 10) === targetMonth;
@@ -145,21 +151,20 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
         const distinctDates = [...new Set(recordsInMonth.map(r => r.attendance_date))];
         let totalPresentCount = 0;
         distinctDates.forEach(date => {
-           totalPresentCount += recordsInMonth.filter(r => r.attendance_date === date && r.status === '출석').length;
+           totalPresentCount += recordsInMonth.filter(r => r.attendance_date === date && r.status?.trim() === '출석').length;
         });
         
         const avgPresent = distinctDates.length > 0 ? Math.round(totalPresentCount / distinctDates.length) : 0;
         monthStats.push({ label: i === 0 ? '이번 달' : `${i}달 전`, subLabel: '', present: avgPresent, total: totalCount });
       }
-      return monthStats; // 4개월 치
+      return monthStats;
     } 
     
-    // 주별 & 기간별 통계 (실제 데이터 계산)
     let dates = [];
     if (statPeriod === 'weekly') {
       let current = new Date(today);
       if (current.getDay() !== 0) current.setDate(current.getDate() - current.getDay());
-      // 최근 5주 (count: 5)
+      // 최근 5주
       for (let i = 4; i >= 0; i--) {
         const d = new Date(current); d.setDate(current.getDate() - (i * 7)); dates.push(d);
       }
@@ -173,27 +178,30 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
     }
 
     return dates.map(dateObj => {
-      const dateStr = getLocalYYYYMMDD(dateObj);
+      const dateStr = getLocalYYYYMMDD(dateObj); // 예: '2026-06-07'
       const month = dateObj.getMonth() + 1;
       const dateNum = dateObj.getDate();
       const weekNum = getWeekOfMonth(dateObj);
-      const records = attHistory.filter(r => r.attendance_date === dateStr);
-      const present = records.filter(r => r.status === '출석').length;
+      
+      // DB의 날짜에 시간(T00:00:00)이 섞여 있어도 앞 10자리(YYYY-MM-DD)만 잘라서 비교합니다.
+      const records = relevantAttHistory.filter(r => r.attendance_date && r.attendance_date.substring(0, 10) === dateStr);
+      
+      // 띄어쓰기가 잘못 입력되었을 경우를 대비해 trim()으로 양옆 공백을 제거 후 비교합니다.
+      const present = records.filter(r => r.status?.trim() === '출석').length;
+      
       return {
           label: `${month}월${weekNum}주`,
           subLabel: `(${month}/${dateNum})`,
           present: present,
-          total: totalCount // 현재 학생 수 기준
+          total: totalCount // 우리 반이면 우리 반 인원수, 전체면 전체 인원수 반영
       };
     });
   })();
   
-  // ⭐ 그래프 화면 꽉 채우기 (viewBox 활용 & 고정픽셀 제거)
+  // ⭐ 그래프 화면 맞춤 (viewBox 활용)
   const chartHeight = 125; 
-  // 실제 픽셀 너비가 아닌 viewBox의 가상 논리 너비
-  // 5주 치일 때 340 정도가 적당하며, 기간지정으로 길어지면 스크롤이 되도록 유동적으로 설정
   const viewBoxWidth = Math.max(340, statsData.length * 68); 
-  const paddingLeft = 20; // 좁은 화면을 위해 좌우 여백 축소
+  const paddingLeft = 20; 
   const paddingRight = 20; 
   const paddingY = 28; 
   const innerWidth = viewBoxWidth - paddingLeft - paddingRight;
@@ -274,7 +282,6 @@ export default function Dashboard({ userRole, currentUser, students, allStudents
             <div className="flex items-center justify-center h-24 text-xs text-stone-400">지정된 기간 내에 해당하는 주일이 없습니다.</div>
           ) : (
             <div className="w-full pb-2 overflow-x-auto hide-scrollbar scroll-smooth">
-              {/* ⭐ viewBox를 사용해 컨테이너 크기(100%)에 딱 맞춰 비율이 조정되도록 변경 */}
               <svg width="100%" height={chartHeight} viewBox={`0 0 ${viewBoxWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet" className="w-full min-w-max">
                 <line x1={paddingLeft} y1={getY(maxVal)} x2={viewBoxWidth - paddingRight} y2={getY(maxVal)} stroke="#e7e5e4" strokeDasharray="2 2" />
                 <line x1={paddingLeft} y1={getY(maxVal/2)} x2={viewBoxWidth - paddingRight} y2={getY(maxVal/2)} stroke="#e7e5e4" strokeDasharray="2 2" />
