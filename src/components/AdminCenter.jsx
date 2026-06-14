@@ -16,18 +16,21 @@ export default function AdminCenter({
   const [addedGroups, setAddedGroups] = useState([]); 
   const [editingTeacher, setEditingTeacher] = useState(null);
 
-  // ⭐ 실제 출석 데이터를 담을 상태
   const [attHistory, setAttHistory] = useState([]);
 
-  // 기간 지정용 상태
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0];
   });
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0]);
 
+  // ⭐ [핵심 수정] 학생들의 반(uniqueGroups)뿐만 아니라, 교사들의 반 이름도 전부 가져와서 합칩니다.
+  // 이렇게 해야 학생이 아직 없는 빈 반(예: 새로 만든 섬김반)도 화면에서 사라지지 않습니다.
+  const teacherGroups = teachers.map(t => t.class_name || t.group).filter(Boolean);
+  const combinedGroups = [...uniqueGroups, ...teacherGroups, ...addedGroups];
+
   // ⭐ [정렬] 반 이름: '전체'를 맨 앞에 두고, 나머지는 가나다순으로 정렬
-  const sortedGroups = ['전체', ...Array.from(new Set([...uniqueGroups, ...addedGroups]))
-    .filter(g => g !== '전체')
+  const sortedGroups = ['전체', ...Array.from(new Set(combinedGroups))
+    .filter(g => g !== '전체' && g !== '미정') // '미정' 등 불필요한 값 필터링
     .sort((a, b) => a.localeCompare(b, 'ko-KR'))];
 
   // ⭐ [정렬] 교사 목록: 가나다순 정렬
@@ -44,7 +47,6 @@ export default function AdminCenter({
     return idxA - idxB;
   });
 
-  // ⭐ 통계 탭이 열리면 데이터베이스에서 전체 학생의 실제 출석 기록을 불러옴
   useEffect(() => {
     if (adminView === 'stats' && students.length > 0) {
       const fetchHistory = async () => {
@@ -60,7 +62,6 @@ export default function AdminCenter({
     }
   }, [adminView, students]);
 
-  // 날짜 변환 헬퍼 함수
   const getLocalYYYYMMDD = (d) => {
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -70,11 +71,9 @@ export default function AdminCenter({
 
   const getWeekOfMonth = (date) => Math.floor((date.getDate() - 1) / 7) + 1;
 
-  // ⭐ 실제 데이터를 바탕으로 그래프 통계 생성
   const statsData = (() => {
     const today = new Date();
     
-    // 월별 통계
     if (statPeriod === 'monthly') {
       let monthStats = [];
       for (let i = 3; i >= 0; i--) {
@@ -100,7 +99,6 @@ export default function AdminCenter({
       return monthStats;
     } 
     
-    // 주별 & 기간별 통계
     let dates = [];
     if (statPeriod === 'weekly') {
       let current = new Date(today);
@@ -150,8 +148,10 @@ export default function AdminCenter({
 
   const handleBatchGroupChange = async () => {
     if(selectedStudentIds.length === 0) { showToast("학생을 먼저 선택해주세요.", "error"); return; }
-    const { error } = await supabase.from('students').update({ class_name: batchGroup }).in('id', selectedStudentIds);
+    const { data, error } = await supabase.from('students').update({ class_name: batchGroup }).in('id', selectedStudentIds).select();
     if (error) { showToast("반 배정 업데이트에 실패했습니다.", "error"); return; }
+    if (!data || data.length === 0) { alert("RLS 보안 규칙에 의해 업데이트가 차단되었습니다."); return; }
+
     setStudents(students.map(s => selectedStudentIds.includes(s.id) ? { ...s, group: batchGroup } : s));
     setSelectedStudentIds([]);
     showToast(`선택된 ${selectedStudentIds.length}명의 학생이 ${batchGroup}(으)로 이동되었습니다.`);
@@ -173,12 +173,15 @@ export default function AdminCenter({
 
   const handleSaveTeacherInfo = async () => {
     if (!editingTeacher || !editingTeacher.name.trim()) return;
-    const { error } = await supabase.from('teachers').update({ 
+    const { data, error } = await supabase.from('teachers').update({ 
       name: editingTeacher.name, email: editingTeacher.email, phone: editingTeacher.phone, 
       birth: editingTeacher.birth, role: editingTeacher.role, class_name: editingTeacher.group 
-    }).eq('id', editingTeacher.id);
+    }).eq('id', editingTeacher.id).select();
 
     if (error) { showToast("교사 정보 수정에 실패했습니다.", "error"); } 
+    else if (!data || data.length === 0) {
+      alert("[DB 업데이트 차단됨]\nSupabase RLS 보안 규칙에 의해 다른 교사의 데이터 수정이 차단되었습니다.");
+    }
     else {
       showToast(`${editingTeacher.name} 선생님의 프로필이 완벽하게 업데이트되었습니다!`);
       if (setTeachers) { setTeachers(teachers.map(t => t.id === editingTeacher.id ? { ...t, name: editingTeacher.name, email: editingTeacher.email, phone: editingTeacher.phone, birth: editingTeacher.birth, role: editingTeacher.role, group: editingTeacher.group, class_name: editingTeacher.group } : t)); } 
@@ -192,43 +195,51 @@ export default function AdminCenter({
     const confirmDelete = window.confirm(`[경고] ${teacherName} 선생님을 정식 교사 명단에서 완전히 삭제하시겠습니까?`);
     if (!confirmDelete) return;
 
-    const { error } = await supabase.from('teachers').delete().eq('id', teacherId);
+    const { data, error } = await supabase.from('teachers').delete().eq('id', teacherId).select();
     if (error) { showToast("교사 삭제 중 서버 오류가 발생했습니다.", "error"); } 
+    else if (!data || data.length === 0) {
+      alert("[DB 삭제 차단됨]\nSupabase RLS 보안 규칙에 의해 데이터 삭제가 차단되었습니다.");
+    }
     else { showToast(`${teacherName} 선생님이 명단에서 삭제되었습니다.`); setTeachers(teachers.filter(t => t.id !== teacherId)); }
   };
 
   const handlePendingChange = (id, field, value) => setPendingTeachers(prev => prev.map(pt => pt.id === id ? { ...pt, [field]: value } : pt));
   
-  // ⭐ 오류가 해결된 승인 처리 로직
   const handleApproveTeacher = async (teacher) => {
-    // 1. UI 옵션과 실제 상태값이 일치하지 않을 때를 대비해 기본값 강제 할당
-    const validRoles = ['교사', '부장', '담당목사'];
-    const finalRole = validRoles.includes(teacher.role) ? teacher.role : '교사';
-    const finalGroup = (teacher.group === '미정' || !teacher.group) ? '전체' : teacher.group;
+    try {
+      const validRoles = ['교사', '부장', '담당목사'];
+      const finalRole = validRoles.includes(teacher.role) ? teacher.role : '교사';
+      const finalGroup = (teacher.group === '미정' || !teacher.group) ? '전체' : teacher.group;
 
-    // 만약 DB에 status 등의 컬럼으로 승인 여부를 별도로 관리한다면 이 객체에 포함시켜야 합니다.
-    const payload = { 
-      role: finalRole, 
-      class_name: finalGroup 
-    };
+      const payload = { 
+        role: finalRole, 
+        class_name: finalGroup 
+      };
 
-    // 2. .single() 제거: 업데이트 후 RLS 제약 등으로 행 반환이 0일 경우 발생하는 오류 원천 차단
-    const { data, error } = await supabase.from('teachers')
-      .update(payload)
-      .eq('id', teacher.id)
-      .select();
+      const { data, error } = await supabase.from('teachers')
+        .update(payload)
+        .eq('id', teacher.id)
+        .select();
 
-    if (error) { 
-      console.error("교사 승인 처리 에러 상세:", error);
-      showToast(`승인 처리에 실패했습니다. (${error.message})`, "error"); 
-    } 
-    else {
+      if (error) { 
+        console.error("교사 승인 처리 에러 상세:", error);
+        showToast(`승인 처리에 실패했습니다. (${error.message})`, "error"); 
+        return;
+      } 
+
+      if (!data || data.length === 0) {
+        alert(`[DB 업데이트 차단됨]\n${teacher.name} 선생님의 승인이 DB에 저장되지 않았습니다!\n\n원인: Supabase RLS(보안 정책)가 관리자의 승인(UPDATE) 권한을 막고 있습니다.\n해결: Supabase 대시보드 -> Table Editor -> teachers 테이블에서 RLS를 잠시 끄시거나, 인증된 사용자의 UPDATE 정책을 허용해주세요.`);
+        return; 
+      }
+
       showToast(`${teacher.name} 선생님이 정식 교사로 승인되었습니다!`);
-      // 반환된 데이터가 없어도 프론트엔드 UI를 강제로 갱신하여 승인 완료 처리
-      const approvedData = (data && data.length > 0) ? data[0] : { ...teacher, role: finalRole, class_name: finalGroup };
+      const approvedData = data[0]; 
       
       if (setTeachers) setTeachers([...teachers, { ...approvedData, group: approvedData.class_name }]);
       if (setPendingTeachers) setPendingTeachers(prev => prev.filter(pt => pt.id !== teacher.id));
+      
+    } catch (err) {
+      showToast("승인 처리 중 오류가 발생했습니다.", "error");
     }
   };
 
@@ -236,8 +247,11 @@ export default function AdminCenter({
     const confirmReject = window.confirm(`${teacherName} 선생님의 가입 신청을 거절하고 명단에서 삭제하시겠습니까?`);
     if (!confirmReject) return;
 
-    const { error } = await supabase.from('teachers').delete().eq('id', teacherId);
+    const { data, error } = await supabase.from('teachers').delete().eq('id', teacherId).select();
     if (error) { showToast("거절 처리 중 오류가 발생했습니다.", "error"); } 
+    else if (!data || data.length === 0) {
+      alert("[DB 삭제 차단됨]\nSupabase RLS 보안 규칙에 의해 데이터 삭제가 차단되었습니다.");
+    }
     else { showToast(`${teacherName} 선생님의 가입이 거절되었습니다.`); setPendingTeachers(pendingTeachers.filter(pt => pt.id !== teacherId)); }
   };
 
@@ -353,7 +367,6 @@ export default function AdminCenter({
                 <div key={pt.id} className="bg-white p-3 rounded-lg border border-amber-200 flex flex-col space-y-3 mb-3">
                   <div className="flex justify-between items-center"><div><p className="text-sm font-bold text-stone-800">{pt.name}</p><p className="text-[10px] text-stone-500">{pt.email} • {pt.date}</p></div><span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold">가입대기</span></div>
                   <div className="flex space-x-2">
-                    {/* ⭐ UI 기본값 매핑 오류 수정: pt.role이 없을 경우를 안전하게 처리 */}
                     <select value={['교사', '부장', '담당목사'].includes(pt.role) ? pt.role : '교사'} onChange={(e) => handlePendingChange(pt.id, 'role', e.target.value)} className="flex-1 text-xs font-bold border rounded p-1.5"><option value="교사">교사</option><option value="부장">부장</option><option value="담당목사">담당목사</option></select>
                     <select value={pt.group === '미정' || !pt.group ? '전체' : pt.group} onChange={(e) => handlePendingChange(pt.id, 'group', e.target.value)} className="flex-1 text-xs font-bold border rounded p-1.5">
                       {sortedGroups.map(g => <option key={g} value={g}>{g}</option>)}
