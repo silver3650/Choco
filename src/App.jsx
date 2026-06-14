@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Church, LogOut, ChevronUp, AlertCircle, CheckCircle2, FileText, 
-  X, Calendar, ClipboardList, UserCircle, Save, Phone, MessageCircle 
+  X, Calendar, ClipboardList, UserCircle, Save, Phone, MessageCircle, MessageSquare 
 } from 'lucide-react';
 
 import { supabase } from './supabase'; 
@@ -15,6 +15,7 @@ import Profile from './components/Profile';
 import Community from './components/Community';
 import AdminCenter from './components/AdminCenter';
 import SuperAdminCenter from './components/SuperAdminCenter';
+import DevTalkModal from './components/DevTalkModal';
 
 export default function App() {
   const getLocalYYYYMMDD = (d = new Date()) => {
@@ -73,7 +74,11 @@ export default function App() {
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
   
+  // ⭐ 기존에 중복 선언된 showScrollTop 오류를 수정했습니다.
   const [showScrollTop, setShowScrollTop] = useState(false);
+  
+  // ⭐ 개발자톡 모달 상태
+  const [devTalkOpen, setDevTalkOpen] = useState(false);
 
   // ⭐ 세션 저장 및 삭제 헬퍼 함수
   const saveAuthState = (user, role) => {
@@ -577,6 +582,8 @@ export default function App() {
                   if (nextRole === '교사' && currentTab === 'admin') setCurrentTab('dashboard'); 
                 }} className="text-[10px] bg-white/20 px-2 py-1.5 rounded-full font-bold transition-colors hover:bg-white/30 drop-shadow-sm">{userRole === '교사' ? '교사 모드' : '관리자 모드'}</button>
               )}
+              {/* ⭐ 개발자톡 버튼 추가 */}
+              <button onClick={() => setDevTalkOpen(true)} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-colors" title="개발자톡 (의견 및 업데이트)"><MessageSquare size={14} className="text-white" /></button>
               <button onClick={openMyProfile} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-colors" title="내 프로필"><UserCircle size={14} className="text-white" /></button>
               <button onClick={handleLogout} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-colors" title="로그아웃"><LogOut size={14} className="text-white" /></button>
             </div>
@@ -817,6 +824,14 @@ export default function App() {
             <span className="text-xl">🚀</span>
           </button>
         )}
+
+        {/* ⭐ 새로 추가된 개발자톡 모달 렌더링 */}
+        <DevTalkModal 
+          isOpen={devTalkOpen} 
+          onClose={() => setDevTalkOpen(false)} 
+          currentUser={currentUser} 
+          showToast={showToast} 
+        />
 
         <BottomNav currentTab={currentTab} setCurrentTab={setCurrentTab} userRole={userRole} />
       </div>
