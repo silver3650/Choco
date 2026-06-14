@@ -43,10 +43,17 @@ export default function App() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentSearch, setStudentSearch] = useState('');
 
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // ⭐ [자동 로그인 기능] 앱 로드 시 로컬 스토리지에서 세션 정보를 불러옴
+  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('app_isAuthenticated') === 'true');
+  const [userRole, setUserRole] = useState(() => localStorage.getItem('app_userRole') || ''); 
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('app_currentUser');
+    return saved ? JSON.parse(saved) : null;
+  }); 
+
+  // ⭐ [오류 수정] 인증 모드 상태 복구
   const [authMode, setAuthMode] = useState('login');
-  const [userRole, setUserRole] = useState(''); 
-  const [currentUser, setCurrentUser] = useState(null); 
+
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [signupForm, setSignupForm] = useState({ name: '', phone: '', email: '', password: '', birth: '' });
   const [createChurchForm, setCreateChurchForm] = useState({ churchName: '', deptName: '', pastorName: '', address: '' });
@@ -67,6 +74,18 @@ export default function App() {
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
   
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // ⭐ 세션 저장 및 삭제 헬퍼 함수
+  const saveAuthState = (user, role) => {
+    localStorage.setItem('app_isAuthenticated', 'true');
+    localStorage.setItem('app_userRole', role);
+    localStorage.setItem('app_currentUser', JSON.stringify(user));
+  };
+  const clearAuthState = () => {
+    localStorage.removeItem('app_isAuthenticated');
+    localStorage.removeItem('app_userRole');
+    localStorage.removeItem('app_currentUser');
+  };
 
   const showToast = (message, type = 'success') => {
     setToast({ isOpen: true, message, type });
@@ -94,24 +113,16 @@ export default function App() {
   
   const targetStudents = userRole === '교사' ? visibleStudents : students;
 
-  // ⭐ [수정된 부분] substring 대신 split을 사용하여 YYYY-MM-DD 형식과 YYYY-M-D 형식을 모두 안전하게 처리합니다.
-  // ⭐ [수정] 어떤 기호(-, ., /)가 들어가도 안전하게 월(Month)을 추출하도록 정규식 적용
   const monthBirthdays = targetStudents.filter(s => {
     if (!s.birth) return false;
-    
-    // 숫자 이외의 모든 특수기호를 기준으로 분리
     const parts = s.birth.split(/[^0-9]/).filter(Boolean);
     let m = '';
     
     if (parts.length >= 2) {
-      // 첫 부분이 연도(4자리)면 두 번째가 월, 연도가 없으면 첫 번째가 월
       m = parts[0].length === 4 ? parts[1] : parts[0];
     } else if (parts.length === 1 && parts[0].length >= 6) {
-      // 기호 없이 20120607 처럼 숫자로만 붙여 쓴 경우
       m = parts[0].substring(4, 6);
     }
-    
-    // 06과 6을 동일하게 취급하여 비교
     return parseInt(m, 10) === parseInt(currentMonthStr, 10);
   });
   
@@ -156,7 +167,7 @@ export default function App() {
       supabase.from('students').select('*').eq('church_id', churchId).order('id', { ascending: true }),
       supabase.from('teachers').select('*').eq('church_id', churchId),
       supabase.from('posts').select('*').eq('church_id', churchId),
-      supabase.from('duties').select('*').eq('church_id', churchId).order('duty_date', { ascending: true }), // ⭐ 일정도 날짜순으로 정렬되게 추가
+      supabase.from('duties').select('*').eq('church_id', churchId).order('duty_date', { ascending: true }), 
       supabase.from('visitation_logs').select('*')
     ]);
 
@@ -175,9 +186,13 @@ export default function App() {
       if (currentUser?.id) {
         const updatedMe = mappedTeachers.find(t => t.id === currentUser.id);
         if (updatedMe) {
-          setCurrentUser(prev => ({ ...prev, name: updatedMe.name, email: updatedMe.email, phone: updatedMe.phone, birth: updatedMe.birth, group: updatedMe.group, originalRole: updatedMe.role }));
+          const updatedUserObj = { ...currentUser, name: updatedMe.name, email: updatedMe.email, phone: updatedMe.phone, birth: updatedMe.birth, group: updatedMe.group, originalRole: updatedMe.role };
+          setCurrentUser(updatedUserObj);
+          localStorage.setItem('app_currentUser', JSON.stringify(updatedUserObj));
+          
           if (updatedMe.role === '교사' && userRole !== '교사') {
             setUserRole('교사');
+            localStorage.setItem('app_userRole', '교사');
             if (currentTab === 'admin') setCurrentTab('dashboard');
           }
         }
@@ -218,9 +233,14 @@ export default function App() {
          if(adminErr) throw adminErr;
          if(firstTeacher) {
            const { data: church } = await supabase.from('churches').select('*').eq('id', firstTeacher.church_id).single();
-           setUserRole(firstTeacher.role === '교사' ? '교사' : '담당목사');
-           setCurrentUser({ id: firstTeacher.id, name: firstTeacher.name, email: firstTeacher.email, phone: firstTeacher.phone, birth: firstTeacher.birth, group: firstTeacher.class_name, churchId: church.id, churchName: church.name, deptName: church.dept, address: church.address, pastorName: church.pastor_name, logo: church.logo, originalRole: firstTeacher.role });
+           const actualRole = firstTeacher.role === '교사' ? '교사' : '담당목사';
+           const adminUserObj = { id: firstTeacher.id, name: firstTeacher.name, email: firstTeacher.email, phone: firstTeacher.phone, birth: firstTeacher.birth, group: firstTeacher.class_name, churchId: church.id, churchName: church.name, deptName: church.dept, address: church.address, pastorName: church.pastor_name, logo: church.logo, originalRole: firstTeacher.role };
+           
+           setUserRole(actualRole);
+           setCurrentUser(adminUserObj);
            setIsAuthenticated(true);
+           saveAuthState(adminUserObj, actualRole);
+
            showToast(`[마스터키] ${firstTeacher.name} 관리자 계정으로 접속했습니다.`, "info");
            return;
          }
@@ -266,9 +286,13 @@ export default function App() {
       }
 
       const actualRole = myTeacher.role === '교사' ? '교사' : '담당목사';
+      const userObj = { id: myTeacher.id, name: myTeacher.name, email: myTeacher.email, phone: myTeacher.phone, birth: myTeacher.birth, group: myTeacher.class_name, churchId: church.id, churchName: church.name, deptName: church.dept, address: church.address, pastorName: church.pastor_name, logo: church.logo, originalRole: myTeacher.role };
+      
       setUserRole(actualRole);
-      setCurrentUser({ id: myTeacher.id, name: myTeacher.name, email: myTeacher.email, phone: myTeacher.phone, birth: myTeacher.birth, group: myTeacher.class_name, churchId: church.id, churchName: church.name, deptName: church.dept, address: church.address, pastorName: church.pastor_name, logo: church.logo, originalRole: myTeacher.role });
+      setCurrentUser(userObj);
       setIsAuthenticated(true);
+      saveAuthState(userObj, actualRole);
+
       showToast(`환영합니다, ${myTeacher.name} 선생님!`);
 
     } catch (err) {
@@ -311,9 +335,12 @@ export default function App() {
       class_name: '전체' 
     }]).select().single();
 
+    const newUserObj = { ...currentUser, id: teacherData.id, group: '전체', churchId: churchData.id, churchName: churchData.name, deptName: churchData.dept, address: churchData.address, pastorName: churchData.pastor_name, originalRole: '담당목사' };
+    
     setUserRole('담당목사');
-    setCurrentUser({ ...currentUser, id: teacherData.id, group: '전체', churchId: churchData.id, churchName: churchData.name, deptName: churchData.dept, address: churchData.address, pastorName: churchData.pastor_name, originalRole: '담당목사' });
+    setCurrentUser(newUserObj);
     setIsAuthenticated(true);
+    saveAuthState(newUserObj, '담당목사');
   };
 
   const handleJoinChurch = async (e) => { 
@@ -341,8 +368,24 @@ export default function App() {
     }
   };
   
+  // ⭐ 로그아웃 시 로컬 스토리지 삭제
   const handleLogout = () => {
-    handleConfirm("로그아웃 하시겠습니까?", () => { setIsAuthenticated(false); setCurrentUser(null); setUserRole(''); setAuthMode('login'); setCurrentTab('dashboard'); setLoginForm({ email: '', password: '' }); setStudents([]); setTeachers([]); setPosts([]); setDuties([]); setLogs([]); setAttendance({}); setSundayAttendance({}); });
+    handleConfirm("로그아웃 하시겠습니까?", () => { 
+      setIsAuthenticated(false); 
+      setCurrentUser(null); 
+      setUserRole(''); 
+      setAuthMode('login'); 
+      setCurrentTab('dashboard'); 
+      setLoginForm({ email: '', password: '' }); 
+      setStudents([]); 
+      setTeachers([]); 
+      setPosts([]); 
+      setDuties([]); 
+      setLogs([]); 
+      setAttendance({}); 
+      setSundayAttendance({}); 
+      clearAuthState(); 
+    });
   };
 
   const handleAttendance = async (id, status) => {
@@ -441,7 +484,9 @@ export default function App() {
     if (error) showToast("프로필 수정에 실패했습니다.", "error");
     else {
       showToast("내 프로필이 업데이트되었습니다.");
-      setCurrentUser(prev => ({ ...prev, name: myProfileModal.name, email: myProfileModal.email, phone: myProfileModal.phone, birth: myProfileModal.birth }));
+      const updatedUser = { ...currentUser, name: myProfileModal.name, email: myProfileModal.email, phone: myProfileModal.phone, birth: myProfileModal.birth };
+      setCurrentUser(updatedUser);
+      localStorage.setItem('app_currentUser', JSON.stringify(updatedUser)); // ⭐ 프로필 변경 시 세션도 업데이트
       setTeachers(teachers.map(t => t.id === currentUser.id ? { ...t, name: myProfileModal.name, email: myProfileModal.email, phone: myProfileModal.phone, birth: myProfileModal.birth } : t));
       closeMyProfile();
     }
@@ -525,7 +570,12 @@ export default function App() {
                 </button>
               )}
               {(currentUser?.originalRole !== '교사' || currentUser?.name?.includes('차창현')) && (
-                <button onClick={() => { const nextRole = userRole === '교사' ? (currentUser.originalRole === '교사' ? '담당목사' : currentUser.originalRole) : '교사'; setUserRole(nextRole); if (nextRole === '교사' && currentTab === 'admin') setCurrentTab('dashboard'); }} className="text-[10px] bg-white/20 px-2 py-1.5 rounded-full font-bold transition-colors hover:bg-white/30 drop-shadow-sm">{userRole === '교사' ? '교사 모드' : '관리자 모드'}</button>
+                <button onClick={() => { 
+                  const nextRole = userRole === '교사' ? (currentUser.originalRole === '교사' ? '담당목사' : currentUser.originalRole) : '교사'; 
+                  setUserRole(nextRole); 
+                  localStorage.setItem('app_userRole', nextRole); // ⭐ 모드 전환 시 세션에도 저장
+                  if (nextRole === '교사' && currentTab === 'admin') setCurrentTab('dashboard'); 
+                }} className="text-[10px] bg-white/20 px-2 py-1.5 rounded-full font-bold transition-colors hover:bg-white/30 drop-shadow-sm">{userRole === '교사' ? '교사 모드' : '관리자 모드'}</button>
               )}
               <button onClick={openMyProfile} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-colors" title="내 프로필"><UserCircle size={14} className="text-white" /></button>
               <button onClick={handleLogout} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-colors" title="로그아웃"><LogOut size={14} className="text-white" /></button>
@@ -535,13 +585,11 @@ export default function App() {
 
         <div id="main-scroll-area" onScroll={handleMainScroll} className="flex-1 overflow-y-auto pb-20 scroll-smooth">
           
-          {/* ⭐ 대시보드 진입 시 상단에 노출되는 생일 및 학교 특별일정 알림 카드 */}
           {currentTab === 'dashboard' && (monthBirthdays.length > 0 || eventStudents.length > 0) && (
             <div className="p-4 pb-0 space-y-2">
               <div className="bg-purple-50 border border-purple-200 rounded-xl p-3.5 flex items-start shadow-sm animate-in fade-in zoom-in duration-300">
                  <span className="text-lg mr-2.5 mt-0.5 shrink-0">🎂</span>
                  <div className="flex-1">
-                    {/* ⭐ 명칭 변경: '교회 학교 전체' -> '전체' */}
                     <h4 className="text-xs font-bold text-purple-700 mb-1">{userRole === '교사' ? '우리 반' : '전체'} 삶의 자리 알림</h4>
                     <div className="space-y-1.5 text-[11px] text-purple-600 leading-tight">
                       {monthBirthdays.length > 0 && (
@@ -736,7 +784,6 @@ export default function App() {
         {confirmDialog.isOpen && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-xs text-center animate-in zoom-in-95 duration-200"><AlertCircle size={40} className="mx-auto text-emerald-500 mb-4" /><p className="text-stone-800 font-bold mb-6">{confirmDialog.message}</p><div className="flex space-x-3"><button onClick={closeConfirm} className="flex-1 bg-stone-100 py-3 rounded-xl font-bold">취소</button><button onClick={executeConfirm} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold">확인</button></div></div></div>)}
         {toast.isOpen && (<div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">{toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-rose-400" /> : <CheckCircle2 size={18} className="mr-2 text-emerald-400" />}<span className="text-sm font-bold">{toast.message}</span></div>)}
 
-        {/* 주말(토요일) 기도 팝업 모달 영역 */}
         {prayerPopup.isOpen && prayerPopup.student && (
           <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4">
             <div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm text-center animate-in zoom-in-95 duration-300">

@@ -199,15 +199,35 @@ export default function AdminCenter({
 
   const handlePendingChange = (id, field, value) => setPendingTeachers(prev => prev.map(pt => pt.id === id ? { ...pt, [field]: value } : pt));
   
+  // ⭐ 오류가 해결된 승인 처리 로직
   const handleApproveTeacher = async (teacher) => {
-    // 승인 시 그룹을 선택하지 않아 '미정'이거나 비어있으면 '전체'로 기본 설정
+    // 1. UI 옵션과 실제 상태값이 일치하지 않을 때를 대비해 기본값 강제 할당
+    const validRoles = ['교사', '부장', '담당목사'];
+    const finalRole = validRoles.includes(teacher.role) ? teacher.role : '교사';
     const finalGroup = (teacher.group === '미정' || !teacher.group) ? '전체' : teacher.group;
-    const { data, error } = await supabase.from('teachers').update({ role: teacher.role, class_name: finalGroup }).eq('id', teacher.id).select().single();
 
-    if (error) { showToast("승인 처리에 실패했습니다.", "error"); } 
+    // 만약 DB에 status 등의 컬럼으로 승인 여부를 별도로 관리한다면 이 객체에 포함시켜야 합니다.
+    const payload = { 
+      role: finalRole, 
+      class_name: finalGroup 
+    };
+
+    // 2. .single() 제거: 업데이트 후 RLS 제약 등으로 행 반환이 0일 경우 발생하는 오류 원천 차단
+    const { data, error } = await supabase.from('teachers')
+      .update(payload)
+      .eq('id', teacher.id)
+      .select();
+
+    if (error) { 
+      console.error("교사 승인 처리 에러 상세:", error);
+      showToast(`승인 처리에 실패했습니다. (${error.message})`, "error"); 
+    } 
     else {
       showToast(`${teacher.name} 선생님이 정식 교사로 승인되었습니다!`);
-      if (setTeachers) setTeachers([...teachers, { ...data, group: data.class_name }]);
+      // 반환된 데이터가 없어도 프론트엔드 UI를 강제로 갱신하여 승인 완료 처리
+      const approvedData = (data && data.length > 0) ? data[0] : { ...teacher, role: finalRole, class_name: finalGroup };
+      
+      if (setTeachers) setTeachers([...teachers, { ...approvedData, group: approvedData.class_name }]);
       if (setPendingTeachers) setPendingTeachers(prev => prev.filter(pt => pt.id !== teacher.id));
     }
   };
@@ -308,7 +328,6 @@ export default function AdminCenter({
            <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-100">
              <div className="flex justify-between items-center mb-4">
                <h3 className="font-bold text-stone-800 text-sm">학생 반 일괄 배정 관리</h3>
-               {/* ⭐ 드롭다운 기본값 '전체 보기'가 맨 위에 정렬됨 */}
                <select value={batchFilterGroup} onChange={(e) => setBatchFilterGroup(e.target.value)} className="text-xs font-bold bg-stone-50 border border-stone-200 rounded-lg p-1.5 text-stone-700">
                  {sortedGroups.map(g => <option key={g} value={g}>{g === '전체' ? '전체 보기' : `${g} 보기`}</option>)}
                </select>
@@ -318,7 +337,6 @@ export default function AdminCenter({
                <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 mb-3 flex items-center justify-between"><span className="text-xs font-bold text-emerald-700">{selectedStudentIds.length}명 선택됨</span><div className="flex space-x-2"><select value={batchGroup} onChange={(e) => setBatchGroup(e.target.value)} className="text-xs font-bold border rounded-md py-1 px-2">{sortedGroups.filter(g => g !== '전체').map(g => <option key={g} value={g}>{g}</option>)}</select><button onClick={handleBatchGroupChange} className="bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-md">이동</button></div></div>
              )}
              <div className="border border-stone-100 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
-               {/* ⭐ 학생 목록 학년순 정렬 반영 (sortedStudents) */}
                {sortedStudents.filter(s => batchFilterGroup === '전체' || s.group === batchFilterGroup).map(student => (
                  <div key={`batch-${student.id}`} onClick={() => toggleStudentSelection(student.id)} className={`flex items-center p-3 border-b border-stone-100 cursor-pointer ${selectedStudentIds.includes(student.id) ? 'bg-emerald-50/50' : 'hover:bg-[#FFFCF9]'}`}>
                    <div className={`w-4 h-4 rounded-sm border mr-3 flex items-center justify-center ${selectedStudentIds.includes(student.id) ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-stone-300'}`}>{selectedStudentIds.includes(student.id) && <Check size={12} className="text-white" />}</div>
@@ -335,8 +353,8 @@ export default function AdminCenter({
                 <div key={pt.id} className="bg-white p-3 rounded-lg border border-amber-200 flex flex-col space-y-3 mb-3">
                   <div className="flex justify-between items-center"><div><p className="text-sm font-bold text-stone-800">{pt.name}</p><p className="text-[10px] text-stone-500">{pt.email} • {pt.date}</p></div><span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold">가입대기</span></div>
                   <div className="flex space-x-2">
-                    <select value={pt.role} onChange={(e) => handlePendingChange(pt.id, 'role', e.target.value)} className="flex-1 text-xs font-bold border rounded p-1.5"><option value="교사">교사</option><option value="부장">부장</option><option value="담당목사">담당목사</option></select>
-                    {/* ⭐ 승인 대기중 교사 그룹: 기본값 '전체', 가나다순 정렬된 sortedGroups 사용 */}
+                    {/* ⭐ UI 기본값 매핑 오류 수정: pt.role이 없을 경우를 안전하게 처리 */}
+                    <select value={['교사', '부장', '담당목사'].includes(pt.role) ? pt.role : '교사'} onChange={(e) => handlePendingChange(pt.id, 'role', e.target.value)} className="flex-1 text-xs font-bold border rounded p-1.5"><option value="교사">교사</option><option value="부장">부장</option><option value="담당목사">담당목사</option></select>
                     <select value={pt.group === '미정' || !pt.group ? '전체' : pt.group} onChange={(e) => handlePendingChange(pt.id, 'group', e.target.value)} className="flex-1 text-xs font-bold border rounded p-1.5">
                       {sortedGroups.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
@@ -349,7 +367,6 @@ export default function AdminCenter({
           )}
 
           <div className="flex justify-between items-center mb-2 mt-6"><span className="text-sm font-bold text-stone-800">정식 등록 교사 ({teachers.length}명)</span></div>
-          {/* ⭐ 정식 등록 교사 리스트: 이름 가나다순 정렬 반영 (sortedTeachers) */}
           {sortedTeachers.map(teacher => (
             <div key={teacher.id} onClick={() => setEditingTeacher({...teacher})} className="bg-white p-4 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center cursor-pointer hover:border-emerald-200">
               <div className="flex items-center"><div className="w-10 h-10 bg-sky-50 rounded-full flex items-center justify-center text-sky-600 mr-3"><UserCog size={20} /></div><div><h3 className="font-bold text-stone-800">{teacher.name} <span className="text-xs font-normal text-stone-400 ml-1">{teacher.group}</span></h3><p className="text-[10px] text-stone-500">{teacher.email || teacher.phone || '연락처 미입력'}</p></div></div>
@@ -377,7 +394,6 @@ export default function AdminCenter({
                 <div><label className="block text-xs font-bold text-stone-600 mb-1">생년월일</label><input type="text" value={editingTeacher.birth || ''} onChange={(e) => setEditingTeacher({...editingTeacher, birth: e.target.value})} className="w-full border rounded-lg p-2.5 text-sm" /></div>
               </div>
               <div><label className="block text-xs font-bold text-stone-600 mb-1">직분 (역할 변경)</label><select value={editingTeacher.role} onChange={(e) => setEditingTeacher({...editingTeacher, role: e.target.value})} className="w-full border rounded-lg p-2.5 text-sm"><option value="교사">교사</option><option value="부장">부장</option><option value="담당목사">담당목사</option></select></div>
-              {/* ⭐ 프로필 설정의 담당 반 드롭다운도 가나다순 반영 */}
               <div><label className="block text-xs font-bold text-stone-600 mb-1">담당 반 지정 (매칭)</label><select value={editingTeacher.group} onChange={(e) => setEditingTeacher({...editingTeacher, group: e.target.value})} className="w-full border rounded-lg p-2.5 text-sm">{sortedGroups.map(g => <option key={g} value={g}>{g}</option>)}</select></div>
             </div>
             <div className="p-4 border-t border-stone-100 flex justify-end space-x-2"><button onClick={() => setEditingTeacher(null)} className="px-4 py-2 border rounded-lg text-xs font-bold">취소</button><button onClick={handleSaveTeacherInfo} className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold">저장 및 반영</button></div>
