@@ -44,7 +44,6 @@ export default function App() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentSearch, setStudentSearch] = useState('');
 
-  // ⭐ [자동 로그인 기능] 앱 로드 시 로컬 스토리지에서 세션 정보를 불러옴
   const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('app_isAuthenticated') === 'true');
   const [userRole, setUserRole] = useState(() => localStorage.getItem('app_userRole') || ''); 
   const [currentUser, setCurrentUser] = useState(() => {
@@ -52,7 +51,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   }); 
 
-  // ⭐ [오류 수정] 인증 모드 상태 복구
   const [authMode, setAuthMode] = useState('login');
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -74,13 +72,10 @@ export default function App() {
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
   
-  // ⭐ 기존에 중복 선언된 showScrollTop 오류를 수정했습니다.
   const [showScrollTop, setShowScrollTop] = useState(false);
   
-  // ⭐ 개발자톡 모달 상태
-  const [devTalkOpen, setDevTalkOpen] = useState(false);
+  const [devTalkOpen, setDevTalkOpen] = useState(false); 
 
-  // ⭐ 세션 저장 및 삭제 헬퍼 함수
   const saveAuthState = (user, role) => {
     localStorage.setItem('app_isAuthenticated', 'true');
     localStorage.setItem('app_userRole', role);
@@ -373,8 +368,9 @@ export default function App() {
     }
   };
   
-  // ⭐ 로그아웃 시 로컬 스토리지 삭제
+  // ⭐ 모달을 닫으면서 로그아웃 진행
   const handleLogout = () => {
+    setMyProfileModal(prev => ({ ...prev, isOpen: false })); // 프로필 모달 닫기
     handleConfirm("로그아웃 하시겠습니까?", () => { 
       setIsAuthenticated(false); 
       setCurrentUser(null); 
@@ -491,7 +487,7 @@ export default function App() {
       showToast("내 프로필이 업데이트되었습니다.");
       const updatedUser = { ...currentUser, name: myProfileModal.name, email: myProfileModal.email, phone: myProfileModal.phone, birth: myProfileModal.birth };
       setCurrentUser(updatedUser);
-      localStorage.setItem('app_currentUser', JSON.stringify(updatedUser)); // ⭐ 프로필 변경 시 세션도 업데이트
+      localStorage.setItem('app_currentUser', JSON.stringify(updatedUser)); 
       setTeachers(teachers.map(t => t.id === currentUser.id ? { ...t, name: myProfileModal.name, email: myProfileModal.email, phone: myProfileModal.phone, birth: myProfileModal.birth } : t));
       closeMyProfile();
     }
@@ -578,14 +574,14 @@ export default function App() {
                 <button onClick={() => { 
                   const nextRole = userRole === '교사' ? (currentUser.originalRole === '교사' ? '담당목사' : currentUser.originalRole) : '교사'; 
                   setUserRole(nextRole); 
-                  localStorage.setItem('app_userRole', nextRole); // ⭐ 모드 전환 시 세션에도 저장
+                  localStorage.setItem('app_userRole', nextRole); 
                   if (nextRole === '교사' && currentTab === 'admin') setCurrentTab('dashboard'); 
                 }} className="text-[10px] bg-white/20 px-2 py-1.5 rounded-full font-bold transition-colors hover:bg-white/30 drop-shadow-sm">{userRole === '교사' ? '교사 모드' : '관리자 모드'}</button>
               )}
-              {/* ⭐ 개발자톡 버튼 추가 */}
+              
+              {/* ⭐ 헤더 아이콘 정리 (로그아웃 삭제됨) */}
               <button onClick={() => setDevTalkOpen(true)} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-colors" title="개발자톡 (의견 및 업데이트)"><MessageSquare size={14} className="text-white" /></button>
               <button onClick={openMyProfile} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-colors" title="내 프로필"><UserCircle size={14} className="text-white" /></button>
-              <button onClick={handleLogout} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-colors" title="로그아웃"><LogOut size={14} className="text-white" /></button>
             </div>
           </div>
         </header>
@@ -638,7 +634,17 @@ export default function App() {
                   <div><label className="block text-xs font-bold text-stone-600 mb-1">생년월일</label><input type="text" value={myProfileModal.birth || ''} onChange={(e) => setMyProfileModal({...myProfileModal, birth: e.target.value})} placeholder="YYYY-MM-DD" className="w-full bg-white border border-stone-200 rounded-lg p-2.5 text-sm" /></div>
                 </div>
               </div>
-              <div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-end space-x-2"><button onClick={closeMyProfile} className="px-4 py-2 bg-white border border-stone-200 text-stone-600 text-xs font-bold rounded-lg hover:bg-stone-50 transition-colors">취소</button><button onClick={saveMyProfile} className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-emerald-600 transition-colors">저장</button></div>
+              
+              {/* ⭐ 프로필 모달 하단: 좌측엔 로그아웃, 우측엔 취소/저장 버튼 배치 */}
+              <div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-between items-center">
+                <button onClick={handleLogout} className="flex items-center px-3 py-2 text-rose-500 bg-rose-50 hover:bg-rose-100 text-xs font-bold rounded-lg transition-colors">
+                  <LogOut size={14} className="mr-1.5" /> 로그아웃
+                </button>
+                <div className="flex space-x-2">
+                  <button onClick={closeMyProfile} className="px-4 py-2 bg-white border border-stone-200 text-stone-600 text-xs font-bold rounded-lg hover:bg-stone-50 transition-colors">취소</button>
+                  <button onClick={saveMyProfile} className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-emerald-600 transition-colors">저장</button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -825,7 +831,6 @@ export default function App() {
           </button>
         )}
 
-        {/* ⭐ 새로 추가된 개발자톡 모달 렌더링 */}
         <DevTalkModal 
           isOpen={devTalkOpen} 
           onClose={() => setDevTalkOpen(false)} 
