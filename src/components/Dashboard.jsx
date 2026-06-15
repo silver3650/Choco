@@ -7,21 +7,36 @@ export default function Dashboard({
   teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile, setPostModal,
   banner, monthBirthdays, eventStudents, openBannerModal 
 }) {
+  // ⭐ [신규] 무조건 한국 시간(KST)을 반환하는 함수
+  const getKSTToday = () => {
+    const curr = new Date();
+    const utc = curr.getTime() + (curr.getTimezoneOffset() * 60 * 1000);
+    return new Date(utc + (9 * 60 * 60 * 1000));
+  };
+
+  const getLocalYYYYMMDD = (d) => {
+    const target = d ? new Date(d) : getKSTToday();
+    const yyyy = target.getFullYear();
+    const mm = String(target.getMonth() + 1).padStart(2, '0');
+    const dd = String(target.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const [statPeriod, setStatPeriod] = useState('weekly'); 
   const [localAttHistory, setLocalAttHistory] = useState([]); 
   
   const [customStart, setCustomStart] = useState(() => {
-    const d = new Date();
+    const d = getKSTToday();
     d.setMonth(d.getMonth() - 1);
-    return d.toISOString().split('T')[0];
+    return getLocalYYYYMMDD(d);
   });
   const [customEnd, setCustomEnd] = useState(() => {
-    return new Date().toISOString().split('T')[0];
+    return getLocalYYYYMMDD();
   });
   
-  const currentActualMonth = new Date().getMonth() + 1;
+  const today = getKSTToday(); // ⭐ 한국 시간 적용
+  const currentActualMonth = today.getMonth() + 1;
   const [selectedMonth, setSelectedMonth] = useState(currentActualMonth);
-  const today = new Date();
   
   const totalCount = students.length; 
   const presentCount = students.filter(s => sundayAttendance && sundayAttendance[s.id] === '출석').length;
@@ -111,13 +126,6 @@ export default function Dashboard({
     
   const currentMonthStr = currentActualMonth + "월";
   const myDuties = duties.filter(duty => duty.month === currentMonthStr && (duty.leader === currentUser?.name || duty.prayer === currentUser?.name));
-
-  const getLocalYYYYMMDD = (d) => {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  };
 
   const getWeekOfMonth = (date) => {
     return Math.floor((date.getDate() - 1) / 7) + 1;
@@ -390,7 +398,7 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* ⭐ 10분 성경 홍보 배너 (문구 및 로고 이미지 적용) */}
+      {/* ⭐ 10분 성경 홍보 배너 */}
       <div 
         onClick={() => window.open('https://www.10minbible.org', '_blank', 'noopener,noreferrer')}
         className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-4 shadow-md cursor-pointer hover:shadow-lg transition-all flex items-center justify-between group"

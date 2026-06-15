@@ -5,14 +5,28 @@ import { supabase } from '../supabase';
 export default function AdminCenter({ 
   currentUser, setCurrentUser, students, setStudents, teachers, setTeachers, 
   pendingTeachers, setPendingTeachers, uniqueGroups, showToast,
-  banner, setBanner // ⭐ 배너 데이터 수신/수정 프롭스 추가
+  banner, setBanner 
 }) {
+  // ⭐ [신규] 무조건 한국 시간(KST)을 반환하는 함수 적용
+  const getKSTToday = () => {
+    const curr = new Date();
+    const utc = curr.getTime() + (curr.getTimezoneOffset() * 60 * 1000);
+    return new Date(utc + (9 * 60 * 60 * 1000));
+  };
+
+  const getLocalYYYYMMDD = (d) => {
+    const target = d ? new Date(d) : getKSTToday();
+    const yyyy = target.getFullYear();
+    const mm = String(target.getMonth() + 1).padStart(2, '0');
+    const dd = String(target.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const [adminView, setAdminView] = useState('stats');
   const [statPeriod, setStatPeriod] = useState('weekly');
   const [batchGroup, setBatchGroup] = useState('1반');
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   
-  // 일괄 배정 다중 필터 상태
   const [batchFilterGroup, setBatchFilterGroup] = useState('전체');
   const [batchFilterGrade, setBatchFilterGrade] = useState('전체');
   const [batchFilterGender, setBatchFilterGender] = useState('전체');
@@ -23,19 +37,18 @@ export default function AdminCenter({
 
   const [attHistory, setAttHistory] = useState([]);
 
-  // ⭐ 배너 입력용 상태 초기화
   const [bannerForm, setUpdateBannerForm] = useState({
     title: banner?.title || '',
     content: banner?.content || '',
-    start_date: banner?.start_date || new Date().toISOString().split('T')[0],
-    end_date: banner?.end_date || new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+    start_date: banner?.start_date || getLocalYYYYMMDD(), // KST 적용
+    end_date: banner?.end_date || (() => { const d = getKSTToday(); d.setDate(d.getDate() + 7); return getLocalYYYYMMDD(d); })(),
     bg_color: banner?.bg_color || 'emerald'
   });
 
   const [customStart, setCustomStart] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0];
+    const d = getKSTToday(); d.setMonth(d.getMonth() - 1); return getLocalYYYYMMDD(d);
   });
-  const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0]);
+  const [customEnd, setCustomEnd] = useState(() => getLocalYYYYMMDD());
 
   const teacherGroups = teachers.map(t => t.class_name || t.group).filter(Boolean);
   const combinedGroups = [...uniqueGroups, ...teacherGroups, ...addedGroups];
@@ -83,17 +96,10 @@ export default function AdminCenter({
     }
   }, [adminView, students]);
 
-  const getLocalYYYYMMDD = (d) => {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
   const getWeekOfMonth = (date) => Math.floor((date.getDate() - 1) / 7) + 1;
 
   const statsData = (() => {
-    const today = new Date();
+    const today = getKSTToday(); // ⭐ KST 적용
     
     if (statPeriod === 'monthly') {
       let monthStats = [];
@@ -282,7 +288,6 @@ export default function AdminCenter({
     else { showToast("교회 설정이 성공적으로 저장 및 반영되었습니다!"); }
   };
 
-  // ⭐ 배너 저장 실행 함수
   const handleSaveBanner = async () => {
     if (!bannerForm.title.trim()) return showToast("배너 제목을 입력해 주세요.", "error");
     
@@ -325,7 +330,6 @@ export default function AdminCenter({
 
       {adminView === 'settings' && (
         <div className="space-y-4 animate-in fade-in">
-          {/* 1. 기존 교회 정보 편집 카드 */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-stone-100">
             <h3 className="font-bold text-stone-800 mb-4 flex items-center"><Church size={16} className="mr-2 text-emerald-400"/> 교회 정보 편집</h3>
             <div className="space-y-4">
@@ -338,7 +342,6 @@ export default function AdminCenter({
             </div>
           </div>
 
-          {/* ⭐ 2. 상단 홍보 배너 설정 카드 */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-stone-100">
             <h3 className="font-bold text-stone-800 mb-4 flex items-center">
               <span className="text-emerald-500 mr-2 text-lg">📢</span> 홈화면 상단 홍보 배너 설정

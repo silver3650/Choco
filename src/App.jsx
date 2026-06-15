@@ -18,10 +18,18 @@ import SuperAdminCenter from './components/SuperAdminCenter';
 import DevTalkModal from './components/DevTalkModal';
 
 export default function App() {
-  const getLocalYYYYMMDD = (d = new Date()) => {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
+  // ⭐ [신규] 무조건 한국 시간(KST)을 반환하는 함수
+  const getKSTToday = () => {
+    const curr = new Date();
+    const utc = curr.getTime() + (curr.getTimezoneOffset() * 60 * 1000);
+    return new Date(utc + (9 * 60 * 60 * 1000)); // UTC에 9시간 더하기
+  };
+
+  const getLocalYYYYMMDD = (d) => {
+    const target = d ? new Date(d) : getKSTToday();
+    const yyyy = target.getFullYear();
+    const mm = String(target.getMonth() + 1).padStart(2, '0');
+    const dd = String(target.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
   };
 
@@ -69,14 +77,12 @@ export default function App() {
   const [myProfileModal, setMyProfileModal] = useState({ isOpen: false, name: '', phone: '', birth: '', email: '' });
 
   const [prayerPopup, setPrayerPopup] = useState({ isOpen: false, student: null });
-  
   const [bannerModal, setBannerModal] = useState({ isOpen: false, type: '', data: null });
 
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
   
   const [showScrollTop, setShowScrollTop] = useState(false);
-  
   const [devTalkOpen, setDevTalkOpen] = useState(false); 
 
   const saveAuthState = (user, role) => {
@@ -114,7 +120,6 @@ export default function App() {
     document.getElementById('main-scroll-area')?.scrollTo({ top: 0, behavior: 'smooth' }); 
   };
 
-  // ⭐ [신규] 탭(페이지)이 변경될 때마다 무조건 스크롤을 최상단으로 끌어올립니다.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     document.getElementById('main-scroll-area')?.scrollTo({ top: 0, behavior: 'auto' });
@@ -130,7 +135,7 @@ export default function App() {
     ? ['전체', currentUser.group]
     : uniqueGroups;
 
-  const todayObj = new Date();
+  const todayObj = getKSTToday(); // ⭐ 한국 시간 적용
   const currentMonthStr = String(todayObj.getMonth() + 1).padStart(2, '0');
   
   const targetStudents = userRole === '교사' ? visibleStudents : students;
@@ -152,7 +157,7 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated && visibleStudents.length > 0 && currentTab === 'dashboard') {
-      const today = new Date();
+      const today = getKSTToday(); // ⭐ 한국 시간 적용
       if (today.getDay() === 6) {
         if (!sessionStorage.getItem('prayerPopupShown')) {
           const studentsWithPrayer = visibleStudents.filter(s => s.prayer && s.prayer.trim() !== '');
@@ -232,9 +237,9 @@ export default function App() {
 
     await fetchAttendanceByDate(selectedAttDate);
 
-    const today = new Date();
+    const today = getKSTToday(); // ⭐ 한국 시간 적용
     const dayOfWeek = today.getDay(); 
-    const lastSunday = new Date(today);
+    const lastSunday = getKSTToday();
     lastSunday.setDate(today.getDate() - dayOfWeek);
     
     const lastSundayStr = getLocalYYYYMMDD(lastSunday);
