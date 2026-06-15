@@ -98,8 +98,27 @@ export default function App() {
   const executeConfirm = () => { if(confirmDialog.onConfirm) confirmDialog.onConfirm(); setConfirmDialog({ isOpen: false, message: '', onConfirm: null }); };
   const closeConfirm = () => setConfirmDialog({ isOpen: false, message: '', onConfirm: null });
   
-  const handleMainScroll = (e) => setShowScrollTop(e.target.scrollTop > 50);
-  const scrollToTop = () => document.getElementById('main-scroll-area')?.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleMainScroll = (e) => setShowScrollTop(e.target.scrollTop > 200);
+  
+  useEffect(() => {
+    const handleWindowScroll = () => {
+      if (window.scrollY > 200) setShowScrollTop(true);
+      else if (document.getElementById('main-scroll-area')?.scrollTop <= 200) setShowScrollTop(false);
+    };
+    window.addEventListener('scroll', handleWindowScroll);
+    return () => window.removeEventListener('scroll', handleWindowScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' }); 
+    document.getElementById('main-scroll-area')?.scrollTo({ top: 0, behavior: 'smooth' }); 
+  };
+
+  // ⭐ [신규] 탭(페이지)이 변경될 때마다 무조건 스크롤을 최상단으로 끌어올립니다.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    document.getElementById('main-scroll-area')?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [currentTab]);
 
   const uniqueGroups = ['전체', ...Array.from(new Set(students.map(s => s.group)))];
 
@@ -559,10 +578,10 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 font-sans flex justify-center">
-      <div className="w-full max-w-md bg-stone-50 min-h-screen relative shadow-2xl flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-stone-100 font-sans flex justify-center overflow-hidden">
+      <div className="w-full max-w-md bg-stone-50 h-full relative shadow-2xl flex flex-col overflow-hidden">
         
-        <header className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-4 sticky top-0 z-10 shadow-md">
+        <header className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-4 sticky top-0 z-10 shadow-md shrink-0">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-3">
               {currentUser?.logo ? <img src={currentUser.logo} alt="logo" className="w-9 h-9 rounded-full bg-white object-cover border-2 border-emerald-200" /> : <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center border-2 border-white/40"><Church size={16} className="text-white drop-shadow-sm" /></div>}
@@ -596,7 +615,7 @@ export default function App() {
           </div>
         </header>
 
-        <div id="main-scroll-area" onScroll={handleMainScroll} className="flex-1 overflow-y-auto pb-20 scroll-smooth">
+        <div id="main-scroll-area" onScroll={handleMainScroll} className="flex-1 overflow-y-auto pb-20 scroll-smooth relative">
           
           {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={students} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} logs={logs} setPostModal={setPostModal} banner={banner} monthBirthdays={monthBirthdays} eventStudents={eventStudents} openBannerModal={(type, data) => setBannerModal({ isOpen: true, type, data })} />}
           
@@ -607,7 +626,6 @@ export default function App() {
           {currentTab === 'admin' && <AdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} students={students} setStudents={setStudents} teachers={teachers} setTeachers={setTeachers} pendingTeachers={pendingTeachers} setPendingTeachers={setPendingTeachers} uniqueGroups={uniqueGroups} showToast={showToast} banner={banner} setBanner={setBanner} />}
           {currentTab === 'superadmin' && <SuperAdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} showToast={showToast} setCurrentTab={setCurrentTab} />}
           
-          {/* ⭐ 푸터 (Copyright) 추가 */}
           <div className="mt-8 pb-6 text-center">
             <p className="text-[10px] text-stone-400 font-medium tracking-tight">Copyright ⓒ 2026 NGM. All right reserved.</p>
           </div>
@@ -626,7 +644,6 @@ export default function App() {
                   <div><label className="block text-xs font-bold text-stone-600 mb-1">생년월일</label><input type="text" value={myProfileModal.birth || ''} onChange={(e) => setMyProfileModal({...myProfileModal, birth: e.target.value})} placeholder="YYYY-MM-DD" className="w-full bg-white border border-stone-200 rounded-lg p-2.5 text-sm" /></div>
                 </div>
               </div>
-              
               <div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-between items-center">
                 <button onClick={handleLogout} className="flex items-center px-3 py-2 text-rose-500 bg-rose-50 hover:bg-rose-100 text-xs font-bold rounded-lg transition-colors">
                   <LogOut size={14} className="mr-1.5" /> 로그아웃
@@ -864,10 +881,10 @@ export default function App() {
         {showScrollTop && (
           <button 
             onClick={scrollToTop} 
-            className="fixed bottom-21.25 right-5 z-[9999] bg-emerald-500 text-white w-12 h-12 rounded-full shadow-2xl border-2 border-white flex items-center justify-center animate-in zoom-in-90 fade-in duration-200 hover:bg-emerald-600 transition-colors"
+            className="fixed bottom-[85px] right-5 z-[999] bg-indigo-500 text-white w-12 h-12 rounded-full shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] border border-indigo-400 flex items-center justify-center animate-in zoom-in-90 fade-in duration-200 hover:bg-indigo-600 hover:scale-105 hover:shadow-xl transition-all"
             title="맨 위로"
           >
-            <span className="text-xl">🚀</span>
+            <ChevronUp size={24} strokeWidth={2.5} />
           </button>
         )}
 
