@@ -69,6 +69,9 @@ export default function App() {
   const [myProfileModal, setMyProfileModal] = useState({ isOpen: false, name: '', phone: '', birth: '', email: '' });
 
   const [prayerPopup, setPrayerPopup] = useState({ isOpen: false, student: null });
+  
+  // ⭐ [신규] 배너/삶의자리 상세 내용 모달 상태
+  const [bannerModal, setBannerModal] = useState({ isOpen: false, type: '', data: null });
 
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
@@ -596,8 +599,8 @@ export default function App() {
 
         <div id="main-scroll-area" onScroll={handleMainScroll} className="flex-1 overflow-y-auto pb-20 scroll-smooth">
           
-          {/* ⭐ 삶의 자리 데이터를 Dashboard 안으로 넣어서 가로 스와이프로 합쳤습니다! */}
-          {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={students} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} logs={logs} setPostModal={setPostModal} banner={banner} monthBirthdays={monthBirthdays} eventStudents={eventStudents} />}
+          {/* ⭐ Dashboard 렌더링 부에 openBannerModal 전달 */}
+          {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={students} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} logs={logs} setPostModal={setPostModal} banner={banner} monthBirthdays={monthBirthdays} eventStudents={eventStudents} openBannerModal={(type, data) => setBannerModal({ isOpen: true, type, data })} />}
           
           {currentTab === 'attendance' && <Attendance userRole={userRole} currentUser={currentUser} students={visibleStudents} attendance={attendance} teachers={teachers} uniqueGroups={visibleGroups} handleAttendance={handleAttendance} handleAllPresent={handleAllPresent} showToast={showToast} selectedAttDate={selectedAttDate} setSelectedAttDate={setSelectedAttDate} fetchAttendanceByDate={fetchAttendanceByDate} />}
           {currentTab === 'students' && <StudentList userRole={userRole} currentUser={currentUser} students={visibleStudents} studentSearch={studentSearch} setStudentSearch={setStudentSearch} openEditStudent={openEditStudent} navigateToProfile={navigateToProfile} logs={logs} />}
@@ -620,7 +623,6 @@ export default function App() {
                   <div><label className="block text-xs font-bold text-stone-600 mb-1">생년월일</label><input type="text" value={myProfileModal.birth || ''} onChange={(e) => setMyProfileModal({...myProfileModal, birth: e.target.value})} placeholder="YYYY-MM-DD" className="w-full bg-white border border-stone-200 rounded-lg p-2.5 text-sm" /></div>
                 </div>
               </div>
-              
               <div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-between items-center">
                 <button onClick={handleLogout} className="flex items-center px-3 py-2 text-rose-500 bg-rose-50 hover:bg-rose-100 text-xs font-bold rounded-lg transition-colors">
                   <LogOut size={14} className="mr-1.5" /> 로그아웃
@@ -778,6 +780,56 @@ export default function App() {
         )}
         
         {editDutyModal.isOpen && editDutyModal.duty && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"><div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white"><h3 className="font-bold text-stone-800 flex items-center text-sm"><Calendar size={18} className="mr-2 text-emerald-500" /> {editDutyModal.duty.date} 순서 변경</h3><button onClick={closeEditDuty} className="text-stone-400"><X size={16} /></button></div><div className="p-5 space-y-4"><div><label className="text-[11px] font-bold text-stone-500 mb-1">기도회 인도</label><select value={editDutyModal.duty.leader} onChange={(e) => setEditDutyModal(p => ({ isOpen: true, duty: { ...p.duty, leader: e.target.value } }))} className="w-full bg-stone-50 border border-stone-200 rounded-lg py-2.5 px-3 text-sm">{teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}</select></div></div><div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-end space-x-2"><button onClick={closeEditDuty} className="px-4 py-2 bg-white border border-stone-200 text-stone-600 text-xs font-bold rounded-lg">취소</button><button onClick={saveEditDuty} className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-lg">저장</button></div></div></div>)}
+
+        {/* ⭐ [신규] 배너 및 삶의 자리 상세 모달창 렌더링 */}
+        {bannerModal.isOpen && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white">
+                <span className={`text-[10px] font-bold px-2 py-1 rounded ${bannerModal.type === 'promo' ? 'bg-emerald-100 text-emerald-600' : 'bg-purple-100 text-purple-600'}`}>
+                  {bannerModal.type === 'promo' ? '주요 공지' : '삶의 자리 안내'}
+                </span>
+                <button onClick={() => setBannerModal({ isOpen: false, type: '', data: null })} className="text-stone-400 bg-stone-100 rounded-full p-1.5 hover:bg-stone-200 transition-colors"><X size={16} /></button>
+              </div>
+              
+              <div className="p-5 overflow-y-auto max-h-[70vh]">
+                {bannerModal.type === 'promo' && bannerModal.data && (
+                  <>
+                    <h3 className="font-extrabold text-stone-800 text-lg mb-2 leading-tight">{bannerModal.data.title}</h3>
+                    <div className="flex justify-between text-xs text-stone-400 mb-4 pb-4 border-b border-stone-100">
+                      <span>게재 기간</span><span className="font-bold">~ {bannerModal.data.end_date.replace(/-/g, '/')}</span>
+                    </div>
+                    <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{bannerModal.data.content}</p>
+                  </>
+                )}
+                
+                {bannerModal.type === 'lifeEvent' && bannerModal.data && (
+                  <>
+                    <h3 className="font-extrabold text-stone-800 text-lg mb-4 flex items-center"><span className="mr-2">🎂</span> 이번 달 삶의 자리</h3>
+                    <div className="space-y-4 text-sm text-stone-700 leading-relaxed">
+                      {bannerModal.data.monthBirthdays?.length > 0 && (
+                        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                          <p className="font-bold text-purple-800 mb-2">🎉 생일자 명단</p>
+                          <p className="text-sm">{bannerModal.data.monthBirthdays.map(s => `${s.name}(${s.group})`).join(', ')}</p>
+                        </div>
+                      )}
+                      {bannerModal.data.eventStudents?.length > 0 && (
+                        <div className="bg-stone-50 p-4 rounded-xl border border-stone-100">
+                          <p className="font-bold text-stone-800 mb-3">📝 주요 일정 및 시험</p>
+                          <div className="space-y-2">
+                            {bannerModal.data.eventStudents.map(s => (
+                              <p key={s.id} className="text-sm leading-snug">• <span className="font-bold text-stone-800">{s.name}({s.group})</span>: {s.specialEvent}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {confirmDialog.isOpen && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-xs text-center animate-in zoom-in-95 duration-200"><AlertCircle size={40} className="mx-auto text-emerald-500 mb-4" /><p className="text-stone-800 font-bold mb-6">{confirmDialog.message}</p><div className="flex space-x-3"><button onClick={closeConfirm} className="flex-1 bg-stone-100 py-3 rounded-xl font-bold">취소</button><button onClick={executeConfirm} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold">확인</button></div></div></div>)}
         {toast.isOpen && (<div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">{toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-rose-400" /> : <CheckCircle2 size={18} className="mr-2 text-emerald-400" />}<span className="text-sm font-bold">{toast.message}</span></div>)}

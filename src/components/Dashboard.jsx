@@ -5,7 +5,7 @@ import { supabase } from '../supabase';
 export default function Dashboard({ 
   userRole, currentUser, students, allStudents, attendance, sundayAttendance, sundayDate, 
   teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile, setPostModal,
-  banner, monthBirthdays, eventStudents // ⭐ 추가된 프롭스
+  banner, monthBirthdays, eventStudents, openBannerModal // ⭐ 클릭 이벤트 함수 추가
 }) {
   const [statPeriod, setStatPeriod] = useState('weekly'); 
   const [localAttHistory, setLocalAttHistory] = useState([]); 
@@ -200,7 +200,6 @@ export default function Dashboard({
   const presentPoints = statsData.map((d, i) => `${getX(i)},${getY(d.present)}`).join(' ');
   const absentPoints = statsData.map((d, i) => `${getX(i)},${getY(d.total - d.present)}`).join(' ');
 
-  // ⭐ 상태 체크
   const hasLifeEvents = monthBirthdays?.length > 0 || eventStudents?.length > 0;
   const hasBanner = !!banner;
   const showNoticeSection = hasBanner || hasLifeEvents;
@@ -208,19 +207,19 @@ export default function Dashboard({
   return (
     <div className="p-4 space-y-5">
       
-      {/* ⭐ [신규] 상단 주요 알림 섹션 (가로 스크롤/스와이퍼 지원) */}
       {showNoticeSection && (
         <div className="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory gap-3 pb-1 -mx-4 px-4">
           
-          {/* 홍보 배너 카드 (얇게 수정) */}
+          {/* ⭐ 클릭 시 상세 모달 오픈 연결 */}
           {hasBanner && (
-            <div className={`snap-center shrink-0 rounded-xl p-4 text-white shadow-sm relative overflow-hidden flex flex-col justify-center min-h-[85px] ${hasLifeEvents ? 'w-[88%]' : 'w-full'} ${
+            <div 
+              onClick={() => openBannerModal('promo', banner)}
+              className={`snap-center shrink-0 rounded-xl p-4 text-white shadow-sm relative overflow-hidden flex flex-col justify-center min-h-[85px] cursor-pointer hover:opacity-95 transition-opacity ${hasLifeEvents ? 'w-[88%]' : 'w-full'} ${
               banner.bg_color === 'amber' ? 'from-amber-500 to-orange-500 bg-gradient-to-br' :
               banner.bg_color === 'rose' ? 'from-rose-500 to-pink-500 bg-gradient-to-br' :
               banner.bg_color === 'indigo' ? 'from-indigo-500 to-blue-600 bg-gradient-to-br' :
               'from-emerald-500 to-teal-600 bg-gradient-to-br'
             }`}>
-               {/* 장식용 투명 원형 배경 */}
                <div className="absolute right-0 top-0 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none -mr-4 -mt-4"></div>
                <div className="flex items-center space-x-1.5 mb-2 relative z-10">
                  <span className="bg-white/20 text-[10px] font-extrabold px-1.5 py-0.5 rounded-sm tracking-wide">📢 주요공지</span>
@@ -235,12 +234,14 @@ export default function Dashboard({
             </div>
           )}
 
-          {/* 삶의 자리 일정 카드 (얇게 수정) */}
+          {/* ⭐ 클릭 시 상세 모달 오픈 연결 */}
           {hasLifeEvents && (
-            <div className={`snap-center shrink-0 rounded-xl p-4 bg-gradient-to-br from-purple-50 to-fuchsia-50 border border-purple-100 shadow-sm flex flex-col justify-center min-h-[85px] ${hasBanner ? 'w-[88%]' : 'w-full'}`}>
+            <div 
+              onClick={() => openBannerModal('lifeEvent', { monthBirthdays, eventStudents })}
+              className={`snap-center shrink-0 rounded-xl p-4 bg-gradient-to-br from-purple-50 to-fuchsia-50 border border-purple-100 shadow-sm flex flex-col justify-center min-h-[85px] cursor-pointer hover:bg-purple-100/50 transition-colors ${hasBanner ? 'w-[88%]' : 'w-full'}`}>
               <div className="flex items-center space-x-1.5 mb-2">
                 <span className="bg-purple-200 text-purple-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded-sm tracking-wide">🎂 삶의 자리</span>
-                <span className="text-[10px] text-purple-600 font-bold truncate">아이들을 위해 기도해주세요</span>
+                <span className="text-[10px] text-purple-600 font-bold truncate">터치해서 전체보기</span>
               </div>
               <div className="space-y-1 text-[11px] text-purple-800 leading-tight">
                 {monthBirthdays?.length > 0 && <p className="truncate"><span className="font-bold opacity-80">생일:</span> {monthBirthdays.map(s => `${s.name}(${s.group})`).join(', ')}</p>}
