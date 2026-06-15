@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronRight, CalendarCheck, Users, Clock, AlertCircle, Phone, MessageCircle, FileText, BarChart2 } from 'lucide-react';
+import { ChevronRight, CalendarCheck, Users, Clock, AlertCircle, Phone, MessageCircle, FileText, BarChart2, BookOpen } from 'lucide-react';
 import { supabase } from '../supabase';
 
 export default function Dashboard({ 
   userRole, currentUser, students, allStudents, attendance, sundayAttendance, sundayDate, 
   teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile, setPostModal,
-  banner, monthBirthdays, eventStudents, openBannerModal // ⭐ 클릭 이벤트 함수 추가
+  banner, monthBirthdays, eventStudents, openBannerModal 
 }) {
   const [statPeriod, setStatPeriod] = useState('weekly'); 
   const [localAttHistory, setLocalAttHistory] = useState([]); 
@@ -210,7 +210,6 @@ export default function Dashboard({
       {showNoticeSection && (
         <div className="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory gap-3 pb-1 -mx-4 px-4">
           
-          {/* ⭐ 클릭 시 상세 모달 오픈 연결 */}
           {hasBanner && (
             <div 
               onClick={() => openBannerModal('promo', banner)}
@@ -234,7 +233,6 @@ export default function Dashboard({
             </div>
           )}
 
-          {/* ⭐ 클릭 시 상세 모달 오픈 연결 */}
           {hasLifeEvents && (
             <div 
               onClick={() => openBannerModal('lifeEvent', { monthBirthdays, eventStudents })}
@@ -390,6 +388,27 @@ export default function Dashboard({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ⭐ 10분 성경 홍보 배너 (문구 및 로고 이미지 적용) */}
+      <div 
+        onClick={() => window.open('https://www.10minbible.org', '_blank', 'noopener,noreferrer')}
+        className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-4 shadow-md cursor-pointer hover:shadow-lg transition-all flex items-center justify-between group"
+      >
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-white/20 bg-white flex items-center justify-center">
+            <img src="https://www.10minbible.org/assets/logo_green-BExpqBFj.jpg" alt="10분 성경 로고" className="w-full h-full object-contain p-0.5" />
+          </div>
+          <div>
+            <h4 className="text-white font-extrabold text-sm flex items-center">
+              10분 성경 앱 실행하기
+            </h4>
+            <p className="text-blue-100 text-[11px] mt-0.5 leading-tight">
+              매일 10분, 다음 세대와 함께하는 거룩한 동행
+            </p>
+          </div>
+        </div>
+        <ChevronRight size={18} className="text-white/70 group-hover:text-white transition-colors" />
       </div>
 
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-rose-100 border-l-4 border-l-rose-300">
