@@ -70,7 +70,6 @@ export default function App() {
 
   const [prayerPopup, setPrayerPopup] = useState({ isOpen: false, student: null });
   
-  // ⭐ [신규] 배너/삶의자리 상세 내용 모달 상태
   const [bannerModal, setBannerModal] = useState({ isOpen: false, type: '', data: null });
 
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
@@ -599,7 +598,6 @@ export default function App() {
 
         <div id="main-scroll-area" onScroll={handleMainScroll} className="flex-1 overflow-y-auto pb-20 scroll-smooth">
           
-          {/* ⭐ Dashboard 렌더링 부에 openBannerModal 전달 */}
           {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={students} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} logs={logs} setPostModal={setPostModal} banner={banner} monthBirthdays={monthBirthdays} eventStudents={eventStudents} openBannerModal={(type, data) => setBannerModal({ isOpen: true, type, data })} />}
           
           {currentTab === 'attendance' && <Attendance userRole={userRole} currentUser={currentUser} students={visibleStudents} attendance={attendance} teachers={teachers} uniqueGroups={visibleGroups} handleAttendance={handleAttendance} handleAllPresent={handleAllPresent} showToast={showToast} selectedAttDate={selectedAttDate} setSelectedAttDate={setSelectedAttDate} fetchAttendanceByDate={fetchAttendanceByDate} />}
@@ -608,6 +606,11 @@ export default function App() {
           {currentTab === 'profile' && <Profile selectedStudent={selectedStudent} logs={logs} setLogs={setLogs} setCurrentTab={setCurrentTab} openEditStudent={openEditStudent} showToast={showToast} openQuickLog={openQuickLog} />}
           {currentTab === 'admin' && <AdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} students={students} setStudents={setStudents} teachers={teachers} setTeachers={setTeachers} pendingTeachers={pendingTeachers} setPendingTeachers={setPendingTeachers} uniqueGroups={uniqueGroups} showToast={showToast} banner={banner} setBanner={setBanner} />}
           {currentTab === 'superadmin' && <SuperAdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} showToast={showToast} setCurrentTab={setCurrentTab} />}
+          
+          {/* ⭐ 푸터 (Copyright) 추가 */}
+          <div className="mt-8 pb-6 text-center">
+            <p className="text-[10px] text-stone-400 font-medium tracking-tight">Copyright ⓒ 2026 NGM. All right reserved.</p>
+          </div>
         </div>
 
         {myProfileModal.isOpen && (
@@ -623,6 +626,7 @@ export default function App() {
                   <div><label className="block text-xs font-bold text-stone-600 mb-1">생년월일</label><input type="text" value={myProfileModal.birth || ''} onChange={(e) => setMyProfileModal({...myProfileModal, birth: e.target.value})} placeholder="YYYY-MM-DD" className="w-full bg-white border border-stone-200 rounded-lg p-2.5 text-sm" /></div>
                 </div>
               </div>
+              
               <div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-between items-center">
                 <button onClick={handleLogout} className="flex items-center px-3 py-2 text-rose-500 bg-rose-50 hover:bg-rose-100 text-xs font-bold rounded-lg transition-colors">
                   <LogOut size={14} className="mr-1.5" /> 로그아웃
@@ -781,7 +785,6 @@ export default function App() {
         
         {editDutyModal.isOpen && editDutyModal.duty && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"><div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white"><h3 className="font-bold text-stone-800 flex items-center text-sm"><Calendar size={18} className="mr-2 text-emerald-500" /> {editDutyModal.duty.date} 순서 변경</h3><button onClick={closeEditDuty} className="text-stone-400"><X size={16} /></button></div><div className="p-5 space-y-4"><div><label className="text-[11px] font-bold text-stone-500 mb-1">기도회 인도</label><select value={editDutyModal.duty.leader} onChange={(e) => setEditDutyModal(p => ({ isOpen: true, duty: { ...p.duty, leader: e.target.value } }))} className="w-full bg-stone-50 border border-stone-200 rounded-lg py-2.5 px-3 text-sm">{teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}</select></div></div><div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-end space-x-2"><button onClick={closeEditDuty} className="px-4 py-2 bg-white border border-stone-200 text-stone-600 text-xs font-bold rounded-lg">취소</button><button onClick={saveEditDuty} className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-lg">저장</button></div></div></div>)}
 
-        {/* ⭐ [신규] 배너 및 삶의 자리 상세 모달창 렌더링 */}
         {bannerModal.isOpen && (
           <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
