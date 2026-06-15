@@ -4,10 +4,11 @@ import { supabase } from '../supabase';
 
 export default function Dashboard({ 
   userRole, currentUser, students, allStudents, attendance, sundayAttendance, sundayDate, 
-  teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile, setPostModal 
+  teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile, setPostModal,
+  banner, monthBirthdays, eventStudents // ⭐ 추가된 프롭스
 }) {
   const [statPeriod, setStatPeriod] = useState('weekly'); 
-  const [localAttHistory, setLocalAttHistory] = useState([]); // ⭐ 대시보드 전용 출석 데이터 상태
+  const [localAttHistory, setLocalAttHistory] = useState([]); 
   
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date();
@@ -22,8 +23,6 @@ export default function Dashboard({
   const [selectedMonth, setSelectedMonth] = useState(currentActualMonth);
   const today = new Date();
   
-  // App.jsx에서 students를 권한에 맞게 잘라서 넘겨주므로, 
-  // 교사면 '우리 반 학생수', 관리자면 '전체 학생수'가 자동으로 계산됩니다.
   const totalCount = students.length; 
   const presentCount = students.filter(s => sundayAttendance && sundayAttendance[s.id] === '출석').length;
   const absentCount = totalCount - presentCount;
@@ -35,18 +34,13 @@ export default function Dashboard({
   const absentStudents = students.filter(s => sundayAttendance && sundayAttendance[s.id] === '결석');
   const consecutiveAbsentees = students.filter(s => s.consecutiveAbsences >= 3);
 
-  // ⭐ 대시보드가 화면에 켜질 때마다 DB에서 최신 출석 데이터를 직접 불러옵니다.
   useEffect(() => {
     const fetchDashboardHistory = async () => {
       if (!students || students.length === 0) return;
-      
-      // 현재 화면에 표시되어야 할 학생들의 ID만 뽑아냅니다.
       const studentIds = students.map(s => s.id);
-      
       const { data, error } = await supabase.from('attendance')
         .select('attendance_date, status, student_id')
-        .in('student_id', studentIds); // 교사면 우리 반만, 관리자면 전체 데이터만 쏙 빼옵니다.
-        
+        .in('student_id', studentIds);
       if (!error && data) {
         setLocalAttHistory(data);
       }
@@ -81,7 +75,6 @@ export default function Dashboard({
     if (!dateStr) return '';
     const month = getMonthFromBirth(dateStr);
     if (month === -1) return dateStr;
-
     let day = -1;
     const parts = String(dateStr).trim().split(/[-./\s]+/);
     if (parts.length === 3) day = parseInt(parts[2], 10);
@@ -130,7 +123,6 @@ export default function Dashboard({
     return Math.floor((date.getDate() - 1) / 7) + 1;
   };
 
-  // ⭐ 오류가 원천 차단된 실제 데이터 기반 통계 로직
   const statsData = (() => {
     const visibleStudentIds = students.map(s => String(s.id));
     const relevantAttHistory = localAttHistory.filter(r => visibleStudentIds.includes(String(r.student_id)));
@@ -164,7 +156,6 @@ export default function Dashboard({
     if (statPeriod === 'weekly') {
       let current = new Date(today);
       if (current.getDay() !== 0) current.setDate(current.getDate() - current.getDay());
-      // 최근 5주
       for (let i = 4; i >= 0; i--) {
         const d = new Date(current); d.setDate(current.getDate() - (i * 7)); dates.push(d);
       }
@@ -178,27 +169,23 @@ export default function Dashboard({
     }
 
     return dates.map(dateObj => {
-      const dateStr = getLocalYYYYMMDD(dateObj); // 예: '2026-06-07'
+      const dateStr = getLocalYYYYMMDD(dateObj); 
       const month = dateObj.getMonth() + 1;
       const dateNum = dateObj.getDate();
       const weekNum = getWeekOfMonth(dateObj);
       
-      // DB의 날짜에 시간(T00:00:00)이 섞여 있어도 앞 10자리(YYYY-MM-DD)만 잘라서 비교합니다.
       const records = relevantAttHistory.filter(r => r.attendance_date && r.attendance_date.substring(0, 10) === dateStr);
-      
-      // 띄어쓰기가 잘못 입력되었을 경우를 대비해 trim()으로 양옆 공백을 제거 후 비교합니다.
       const present = records.filter(r => r.status?.trim() === '출석').length;
       
       return {
           label: `${month}월${weekNum}주`,
           subLabel: `(${month}/${dateNum})`,
           present: present,
-          total: totalCount // 우리 반이면 우리 반 인원수, 전체면 전체 인원수 반영
+          total: totalCount 
       };
     });
   })();
   
-  // ⭐ 그래프 화면 맞춤 (viewBox 활용)
   const chartHeight = 125; 
   const viewBoxWidth = Math.max(340, statsData.length * 68); 
   const paddingLeft = 20; 
@@ -213,8 +200,57 @@ export default function Dashboard({
   const presentPoints = statsData.map((d, i) => `${getX(i)},${getY(d.present)}`).join(' ');
   const absentPoints = statsData.map((d, i) => `${getX(i)},${getY(d.total - d.present)}`).join(' ');
 
+  // ⭐ 상태 체크
+  const hasLifeEvents = monthBirthdays?.length > 0 || eventStudents?.length > 0;
+  const hasBanner = !!banner;
+  const showNoticeSection = hasBanner || hasLifeEvents;
+
   return (
     <div className="p-4 space-y-5">
+      
+      {/* ⭐ [신규] 상단 주요 알림 섹션 (가로 스크롤/스와이퍼 지원) */}
+      {showNoticeSection && (
+        <div className="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory gap-3 pb-1 -mx-4 px-4">
+          
+          {/* 홍보 배너 카드 (얇게 수정) */}
+          {hasBanner && (
+            <div className={`snap-center shrink-0 rounded-xl p-4 text-white shadow-sm relative overflow-hidden flex flex-col justify-center min-h-[85px] ${hasLifeEvents ? 'w-[88%]' : 'w-full'} ${
+              banner.bg_color === 'amber' ? 'from-amber-500 to-orange-500 bg-gradient-to-br' :
+              banner.bg_color === 'rose' ? 'from-rose-500 to-pink-500 bg-gradient-to-br' :
+              banner.bg_color === 'indigo' ? 'from-indigo-500 to-blue-600 bg-gradient-to-br' :
+              'from-emerald-500 to-teal-600 bg-gradient-to-br'
+            }`}>
+               {/* 장식용 투명 원형 배경 */}
+               <div className="absolute right-0 top-0 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none -mr-4 -mt-4"></div>
+               <div className="flex items-center space-x-1.5 mb-2 relative z-10">
+                 <span className="bg-white/20 text-[10px] font-extrabold px-1.5 py-0.5 rounded-sm tracking-wide">📢 주요공지</span>
+                 <span className="text-[10px] text-white/90 font-bold truncate">~ {banner.end_date.substring(5).replace('-', '/')}</span>
+               </div>
+               <h3 className="text-sm font-extrabold tracking-tight drop-shadow-sm leading-snug relative z-10 mb-1">{banner.title}</h3>
+               {banner.content && (
+                 <p className="text-[11px] text-white/95 leading-relaxed relative z-10 truncate">
+                   {banner.content}
+                 </p>
+               )}
+            </div>
+          )}
+
+          {/* 삶의 자리 일정 카드 (얇게 수정) */}
+          {hasLifeEvents && (
+            <div className={`snap-center shrink-0 rounded-xl p-4 bg-gradient-to-br from-purple-50 to-fuchsia-50 border border-purple-100 shadow-sm flex flex-col justify-center min-h-[85px] ${hasBanner ? 'w-[88%]' : 'w-full'}`}>
+              <div className="flex items-center space-x-1.5 mb-2">
+                <span className="bg-purple-200 text-purple-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded-sm tracking-wide">🎂 삶의 자리</span>
+                <span className="text-[10px] text-purple-600 font-bold truncate">아이들을 위해 기도해주세요</span>
+              </div>
+              <div className="space-y-1 text-[11px] text-purple-800 leading-tight">
+                {monthBirthdays?.length > 0 && <p className="truncate"><span className="font-bold opacity-80">생일:</span> {monthBirthdays.map(s => `${s.name}(${s.group})`).join(', ')}</p>}
+                {eventStudents?.length > 0 && <p className="truncate"><span className="font-bold opacity-80">일정:</span> {eventStudents.map(s => `${s.name}(${s.specialEvent})`).join(', ')}</p>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex justify-between items-end mb-2">
         <div>
           <h2 className="text-2xl font-bold text-stone-800 tracking-tight leading-tight">환영합니다,<br/><span className="text-emerald-600">{currentUser?.name} 선생님!</span></h2>

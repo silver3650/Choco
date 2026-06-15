@@ -40,6 +40,7 @@ export default function App() {
   
   const [duties, setDuties] = useState([]);
   const [posts, setPosts] = useState([]);
+  const [banner, setBanner] = useState(null); 
   
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentSearch, setStudentSearch] = useState('');
@@ -162,19 +163,28 @@ export default function App() {
   const fetchAppData = async (churchId) => {
     const [
       { data: studentsData }, { data: teachersData }, { data: postsData }, 
-      { data: dutiesData }, { data: logsData }
+      { data: dutiesData }, { data: logsData }, { data: bannerData }
     ] = await Promise.all([
       supabase.from('students').select('*').eq('church_id', churchId).order('id', { ascending: true }),
       supabase.from('teachers').select('*').eq('church_id', churchId),
       supabase.from('posts').select('*').eq('church_id', churchId),
       supabase.from('duties').select('*').eq('church_id', churchId).order('duty_date', { ascending: true }), 
-      supabase.from('visitation_logs').select('*')
+      supabase.from('visitation_logs').select('*'),
+      supabase.from('church_banners').select('*').eq('church_id', churchId).order('id', { ascending: false }) 
     ]);
 
     if (studentsData) setStudents(studentsData.map(s => ({ ...s, group: s.class_name, parentsName: s.parents_name, parentsPhone: s.parents_phone, consecutiveAbsences: s.consecutive_absences, prayer: s.prayer_requests, prayedCount: s.prayed_count || 0, specialEvent: s.special_event || '' })));
     if (postsData) setPosts(postsData.map(p => ({ ...p, type: p.post_type, hasFile: p.has_file, date: p.post_date })));
     if (dutiesData) setDuties(dutiesData.map(d => ({ ...d, month: d.duty_month, date: d.duty_date })));
     if (logsData) setLogs(logsData.map(l => ({ ...l, studentId: l.student_id, date: l.visit_date, teacher: l.teacher_name })));
+
+    if (bannerData && bannerData.length > 0) {
+      const todayStr = getLocalYYYYMMDD();
+      const activeBanner = bannerData.find(b => b.start_date <= todayStr && b.end_date >= todayStr);
+      setBanner(activeBanner || null);
+    } else {
+      setBanner(null);
+    }
 
     if (teachersData) {
       const mappedTeachers = teachersData.filter(t => t.role !== '가입대기').map(t => ({ ...t, group: t.class_name }));
@@ -368,9 +378,8 @@ export default function App() {
     }
   };
   
-  // ⭐ 모달을 닫으면서 로그아웃 진행
   const handleLogout = () => {
-    setMyProfileModal(prev => ({ ...prev, isOpen: false })); // 프로필 모달 닫기
+    setMyProfileModal(prev => ({ ...prev, isOpen: false })); 
     handleConfirm("로그아웃 하시겠습니까?", () => { 
       setIsAuthenticated(false); 
       setCurrentUser(null); 
@@ -579,7 +588,6 @@ export default function App() {
                 }} className="text-[10px] bg-white/20 px-2 py-1.5 rounded-full font-bold transition-colors hover:bg-white/30 drop-shadow-sm">{userRole === '교사' ? '교사 모드' : '관리자 모드'}</button>
               )}
               
-              {/* ⭐ 헤더 아이콘 정리 (로그아웃 삭제됨) */}
               <button onClick={() => setDevTalkOpen(true)} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-colors" title="개발자톡 (의견 및 업데이트)"><MessageSquare size={14} className="text-white" /></button>
               <button onClick={openMyProfile} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-colors" title="내 프로필"><UserCircle size={14} className="text-white" /></button>
             </div>
@@ -588,36 +596,14 @@ export default function App() {
 
         <div id="main-scroll-area" onScroll={handleMainScroll} className="flex-1 overflow-y-auto pb-20 scroll-smooth">
           
-          {currentTab === 'dashboard' && (monthBirthdays.length > 0 || eventStudents.length > 0) && (
-            <div className="p-4 pb-0 space-y-2">
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-3.5 flex items-start shadow-sm animate-in fade-in zoom-in duration-300">
-                 <span className="text-lg mr-2.5 mt-0.5 shrink-0">🎂</span>
-                 <div className="flex-1">
-                    <h4 className="text-xs font-bold text-purple-700 mb-1">{userRole === '교사' ? '우리 반' : '전체'} 삶의 자리 알림</h4>
-                    <div className="space-y-1.5 text-[11px] text-purple-600 leading-tight">
-                      {monthBirthdays.length > 0 && (
-                        <p>🎉 <span className="font-bold">이번 달({currentMonthStr}월) 생일:</span> {monthBirthdays.map(s => `${s.name}(${s.group})`).join(', ')}</p>
-                      )}
-                      {eventStudents.length > 0 && (
-                        <div className="space-y-0.5 mt-1">
-                          <span className="font-bold">📝 주요 일정 및 시험:</span>
-                          {eventStudents.map(s => (
-                            <p key={s.id} className="ml-2 mt-0.5">• {s.name}({s.group}): <span className="font-bold text-purple-800">{s.specialEvent}</span></p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                 </div>
-              </div>
-            </div>
-          )}
-
-          {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={students} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} logs={logs} setPostModal={setPostModal} />}
+          {/* ⭐ 삶의 자리 데이터를 Dashboard 안으로 넣어서 가로 스와이프로 합쳤습니다! */}
+          {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={students} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} logs={logs} setPostModal={setPostModal} banner={banner} monthBirthdays={monthBirthdays} eventStudents={eventStudents} />}
+          
           {currentTab === 'attendance' && <Attendance userRole={userRole} currentUser={currentUser} students={visibleStudents} attendance={attendance} teachers={teachers} uniqueGroups={visibleGroups} handleAttendance={handleAttendance} handleAllPresent={handleAllPresent} showToast={showToast} selectedAttDate={selectedAttDate} setSelectedAttDate={setSelectedAttDate} fetchAttendanceByDate={fetchAttendanceByDate} />}
           {currentTab === 'students' && <StudentList userRole={userRole} currentUser={currentUser} students={visibleStudents} studentSearch={studentSearch} setStudentSearch={setStudentSearch} openEditStudent={openEditStudent} navigateToProfile={navigateToProfile} logs={logs} />}
           {currentTab === 'community' && <Community userRole={userRole} currentUser={currentUser} posts={posts} setPosts={setPosts} duties={duties} setDuties={setDuties} communityTab={communityTab} setCommunityTab={setCommunityTab} showToast={showToast} setPostModal={setPostModal} students={visibleStudents} setStudents={setStudents} />}
           {currentTab === 'profile' && <Profile selectedStudent={selectedStudent} logs={logs} setLogs={setLogs} setCurrentTab={setCurrentTab} openEditStudent={openEditStudent} showToast={showToast} openQuickLog={openQuickLog} />}
-          {currentTab === 'admin' && <AdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} students={students} setStudents={setStudents} teachers={teachers} setTeachers={setTeachers} pendingTeachers={pendingTeachers} setPendingTeachers={setPendingTeachers} uniqueGroups={uniqueGroups} showToast={showToast} />}
+          {currentTab === 'admin' && <AdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} students={students} setStudents={setStudents} teachers={teachers} setTeachers={setTeachers} pendingTeachers={pendingTeachers} setPendingTeachers={setPendingTeachers} uniqueGroups={uniqueGroups} showToast={showToast} banner={banner} setBanner={setBanner} />}
           {currentTab === 'superadmin' && <SuperAdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} showToast={showToast} setCurrentTab={setCurrentTab} />}
         </div>
 
@@ -635,7 +621,6 @@ export default function App() {
                 </div>
               </div>
               
-              {/* ⭐ 프로필 모달 하단: 좌측엔 로그아웃, 우측엔 취소/저장 버튼 배치 */}
               <div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-between items-center">
                 <button onClick={handleLogout} className="flex items-center px-3 py-2 text-rose-500 bg-rose-50 hover:bg-rose-100 text-xs font-bold rounded-lg transition-colors">
                   <LogOut size={14} className="mr-1.5" /> 로그아웃

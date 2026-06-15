@@ -4,14 +4,15 @@ import { supabase } from '../supabase';
 
 export default function AdminCenter({ 
   currentUser, setCurrentUser, students, setStudents, teachers, setTeachers, 
-  pendingTeachers, setPendingTeachers, uniqueGroups, showToast 
+  pendingTeachers, setPendingTeachers, uniqueGroups, showToast,
+  banner, setBanner // ⭐ 배너 데이터 수신/수정 프롭스 추가
 }) {
   const [adminView, setAdminView] = useState('stats');
   const [statPeriod, setStatPeriod] = useState('weekly');
   const [batchGroup, setBatchGroup] = useState('1반');
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   
-  // ⭐ 일괄 배정 다중 필터 상태
+  // 일괄 배정 다중 필터 상태
   const [batchFilterGroup, setBatchFilterGroup] = useState('전체');
   const [batchFilterGrade, setBatchFilterGrade] = useState('전체');
   const [batchFilterGender, setBatchFilterGender] = useState('전체');
@@ -21,6 +22,15 @@ export default function AdminCenter({
   const [editingTeacher, setEditingTeacher] = useState(null);
 
   const [attHistory, setAttHistory] = useState([]);
+
+  // ⭐ 배너 입력용 상태 초기화
+  const [bannerForm, setUpdateBannerForm] = useState({
+    title: banner?.title || '',
+    content: banner?.content || '',
+    start_date: banner?.start_date || new Date().toISOString().split('T')[0],
+    end_date: banner?.end_date || new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+    bg_color: banner?.bg_color || 'emerald'
+  });
 
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0];
@@ -38,7 +48,6 @@ export default function AdminCenter({
 
   const gradeOrder = ['유아', '유치', '초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3', '청년'];
   
-  // ⭐ DB에 있는 실제 학년들만 필터 드롭다운에 보여주기 위한 로직
   const allAvailableGrades = [
     ...gradeOrder.filter(grade => students.some(s => s.grade === grade)), 
     ...Array.from(new Set(students.map(s => s.grade))).filter(g => g && !gradeOrder.includes(g))
@@ -53,7 +62,6 @@ export default function AdminCenter({
     return idxA - idxB;
   });
 
-  // ⭐ 현재 필터 조건에 맞는 학생들만 추려내는 로직
   const filteredBatchStudents = sortedStudents.filter(s => 
     (batchFilterGroup === '전체' || s.group === batchFilterGroup) &&
     (batchFilterGrade === '전체' || s.grade === batchFilterGrade) &&
@@ -274,6 +282,38 @@ export default function AdminCenter({
     else { showToast("교회 설정이 성공적으로 저장 및 반영되었습니다!"); }
   };
 
+  // ⭐ 배너 저장 실행 함수
+  const handleSaveBanner = async () => {
+    if (!bannerForm.title.trim()) return showToast("배너 제목을 입력해 주세요.", "error");
+    
+    const payload = {
+      church_id: currentUser.churchId,
+      title: bannerForm.title,
+      content: bannerForm.content,
+      start_date: bannerForm.start_date,
+      end_date: bannerForm.end_date,
+      bg_color: bannerForm.bg_color
+    };
+
+    let error = null;
+    let data = null;
+    
+    if (banner?.id) {
+      const res = await supabase.from('church_banners').update(payload).eq('id', banner.id).select();
+      error = res.error; data = res.data;
+    } else {
+      const res = await supabase.from('church_banners').insert([payload]).select();
+      error = res.error; data = res.data;
+    }
+
+    if (error) {
+      showToast("배너 저장에 실패했습니다.", "error");
+    } else {
+      showToast("상단 공지 배너가 성공적으로 반영되었습니다!");
+      if (data && data.length > 0) setBanner(data[0]);
+    }
+  };
+
   return (
     <div className="p-4 space-y-4">
       <div className="flex justify-between items-center mb-2"><h2 className="text-lg font-bold text-stone-800 flex items-center"><Settings size={18} className="mr-1.5 text-emerald-500"/>관리자 센터</h2></div>
@@ -284,15 +324,69 @@ export default function AdminCenter({
       </div>
 
       {adminView === 'settings' && (
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-stone-100 animate-in fade-in">
-          <h3 className="font-bold text-stone-800 mb-4 flex items-center"><Church size={16} className="mr-2 text-emerald-400"/> 교회 정보 편집</h3>
-          <div className="space-y-4">
-            <div><label className="block text-xs font-bold text-stone-700 mb-1">교회 로고 (이미지 주소 URL)</label><input type="text" value={currentUser.logo || ''} onChange={e => setCurrentUser({...currentUser, logo: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-sm" /></div>
-            <div><label className="block text-xs font-bold text-stone-700 mb-1">교회 이름</label><input type="text" value={currentUser.churchName} onChange={e => setCurrentUser({...currentUser, churchName: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-sm" /></div>
-            <div><label className="block text-xs font-bold text-stone-700 mb-1">부서 이름</label><input type="text" value={currentUser.deptName} onChange={e => setCurrentUser({...currentUser, deptName: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-sm" /></div>
-            <div><label className="block text-xs font-bold text-stone-700 mb-1">담당 사역자</label><input type="text" value={currentUser.pastorName || ''} onChange={e => setCurrentUser({...currentUser, pastorName: e.target.value})} placeholder="이름을 입력하세요" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-sm" /></div>
-            <div><label className="block text-xs font-bold text-stone-700 mb-1">교회 주소</label><div className="flex"><div className="bg-stone-100 border border-stone-200 border-r-0 rounded-l-lg px-3 flex items-center justify-center"><MapPin size={16} className="text-stone-400"/></div><input type="text" value={currentUser.address || ''} onChange={e => setCurrentUser({...currentUser, address: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-r-lg px-3 py-2.5 text-sm" /></div></div>
-            <div className="pt-2"><button onClick={handleSaveChurchSettings} className="w-full bg-emerald-500 text-white font-bold py-3 rounded-xl text-sm hover:bg-emerald-600 transition-colors"><Save size={16} className="mr-2 inline" /> 변경사항 저장</button></div>
+        <div className="space-y-4 animate-in fade-in">
+          {/* 1. 기존 교회 정보 편집 카드 */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-stone-100">
+            <h3 className="font-bold text-stone-800 mb-4 flex items-center"><Church size={16} className="mr-2 text-emerald-400"/> 교회 정보 편집</h3>
+            <div className="space-y-4">
+              <div><label className="block text-xs font-bold text-stone-700 mb-1">교회 로고 (이미지 주소 URL)</label><input type="text" value={currentUser.logo || ''} onChange={e => setCurrentUser({...currentUser, logo: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-sm" /></div>
+              <div><label className="block text-xs font-bold text-stone-700 mb-1">교회 이름</label><input type="text" value={currentUser.churchName} onChange={e => setCurrentUser({...currentUser, churchName: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-sm" /></div>
+              <div><label className="block text-xs font-bold text-stone-700 mb-1">부서 이름</label><input type="text" value={currentUser.deptName} onChange={e => setCurrentUser({...currentUser, deptName: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-sm" /></div>
+              <div><label className="block text-xs font-bold text-stone-700 mb-1">담당 사역자</label><input type="text" value={currentUser.pastorName || ''} onChange={e => setCurrentUser({...currentUser, pastorName: e.target.value})} placeholder="이름을 입력하세요" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-sm" /></div>
+              <div><label className="block text-xs font-bold text-stone-700 mb-1">교회 주소</label><div className="flex"><div className="bg-stone-100 border border-stone-200 border-r-0 rounded-l-lg px-3 flex items-center justify-center"><MapPin size={16} className="text-stone-400"/></div><input type="text" value={currentUser.address || ''} onChange={e => setCurrentUser({...currentUser, address: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-r-lg px-3 py-2.5 text-sm" /></div></div>
+              <div className="pt-2"><button onClick={handleSaveChurchSettings} className="w-full bg-emerald-500 text-white font-bold py-3 rounded-xl text-sm hover:bg-emerald-600 transition-colors"><Save size={16} className="mr-2 inline" /> 변경사항 저장</button></div>
+            </div>
+          </div>
+
+          {/* ⭐ 2. 상단 홍보 배너 설정 카드 */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-stone-100">
+            <h3 className="font-bold text-stone-800 mb-4 flex items-center">
+              <span className="text-emerald-500 mr-2 text-lg">📢</span> 홈화면 상단 홍보 배너 설정
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">배너 제목</label>
+                <input type="text" placeholder="예: 2026 청소년부 여름 수련회" value={bannerForm.title} onChange={e => setUpdateBannerForm({...bannerForm, title: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">상세 안내 내용 (문자 입력)</label>
+                <textarea placeholder="예: 일시: 8/3~5&#10;장소: 은혜수양관&#10;회비: 3만원 (문의: 각 반 담임교사)" value={bannerForm.content} onChange={e => setUpdateBannerForm({...bannerForm, content: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm h-24 resize-none leading-relaxed focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">게재 시작일</label>
+                  <input type="date" value={bannerForm.start_date} onChange={e => setUpdateBannerForm({...bannerForm, start_date: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">게재 종료일</label>
+                  <input type="date" value={bannerForm.end_date} onChange={e => setUpdateBannerForm({...bannerForm, end_date: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">배너 배경색 테마 선택</label>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  {['emerald', 'amber', 'rose', 'indigo'].map(color => (
+                    <button
+                      key={color} type="button" onClick={() => setUpdateBannerForm({...bannerForm, bg_color: color})}
+                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                        bannerForm.bg_color === color ? 'ring-2 ring-stone-800 border-transparent text-white shadow-md' : 'bg-stone-50 border-stone-200 text-stone-600'
+                      } ${
+                        color === 'emerald' ? 'bg-emerald-500 text-white' :
+                        color === 'amber' ? 'bg-amber-500 text-white' :
+                        color === 'rose' ? 'bg-rose-500 text-white' : 'bg-indigo-500 text-white'
+                      }`}
+                    >
+                      {color === 'emerald' ? '초록' : color === 'amber' ? '주황' : color === 'rose' ? '빨강' : '보라'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="pt-2">
+                <button onClick={handleSaveBanner} className="w-full bg-stone-800 text-white font-bold py-3 rounded-xl text-sm hover:bg-stone-700 transition-colors shadow-sm">
+                  배너 광고 저장 및 즉시 배포
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -353,7 +447,6 @@ export default function AdminCenter({
            </div>
 
            <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-100">
-             {/* ⭐ 다중 필터 및 전체 선택 기능 적용 */}
              <div className="flex flex-col space-y-3 mb-4">
                <div className="flex justify-between items-center">
                  <h3 className="font-bold text-stone-800 text-sm">학생 반 일괄 배정 관리</h3>
