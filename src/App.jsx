@@ -15,14 +15,14 @@ import Profile from './components/Profile';
 import Community from './components/Community';
 import AdminCenter from './components/AdminCenter';
 import SuperAdminCenter from './components/SuperAdminCenter';
+import EventCenter from './components/EventCenter';
 import DevTalkModal from './components/DevTalkModal';
 
 export default function App() {
-  // ⭐ [신규] 무조건 한국 시간(KST)을 반환하는 함수
   const getKSTToday = () => {
     const curr = new Date();
     const utc = curr.getTime() + (curr.getTimezoneOffset() * 60 * 1000);
-    return new Date(utc + (9 * 60 * 60 * 1000)); // UTC에 9시간 더하기
+    return new Date(utc + (9 * 60 * 60 * 1000));
   };
 
   const getLocalYYYYMMDD = (d) => {
@@ -85,6 +85,10 @@ export default function App() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [devTalkOpen, setDevTalkOpen] = useState(false); 
 
+  // ⭐ NEW 뱃지 상태 관리
+  const [hasNewCommunity, setHasNewCommunity] = useState(false);
+  const [hasNewEvent, setHasNewEvent] = useState(false);
+
   const saveAuthState = (user, role) => {
     localStorage.setItem('app_isAuthenticated', 'true');
     localStorage.setItem('app_userRole', role);
@@ -120,14 +124,30 @@ export default function App() {
     document.getElementById('main-scroll-area')?.scrollTo({ top: 0, behavior: 'smooth' }); 
   };
 
+  // ⭐ 탭 이동 시 확인 시간 갱신하여 뱃지 지우기
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     document.getElementById('main-scroll-area')?.scrollTo({ top: 0, behavior: 'auto' });
+
+    if (currentTab === 'community') {
+      setHasNewCommunity(false);
+      localStorage.setItem('last_checked_community', Date.now().toString());
+    }
+    if (currentTab === 'events') {
+      setHasNewEvent(false);
+      localStorage.setItem('last_checked_event', Date.now().toString());
+    }
   }, [currentTab]);
 
-  const uniqueGroups = ['전체', ...Array.from(new Set(students.map(s => s.group)))];
+  const activeStudents = students.filter(s => s.status !== '재적제외');
+
+  const uniqueGroups = ['전체', ...Array.from(new Set(activeStudents.map(s => s.group)))];
 
   const visibleStudents = (userRole === '교사' && currentUser?.group && currentUser.group !== '전체' && currentUser.group !== '총괄')
+    ? activeStudents.filter(s => s.group === currentUser.group)
+    : activeStudents;
+    
+  const listStudents = (userRole === '교사' && currentUser?.group && currentUser.group !== '전체' && currentUser.group !== '총괄')
     ? students.filter(s => s.group === currentUser.group)
     : students;
     
@@ -135,10 +155,10 @@ export default function App() {
     ? ['전체', currentUser.group]
     : uniqueGroups;
 
-  const todayObj = getKSTToday(); // ⭐ 한국 시간 적용
+  const todayObj = getKSTToday();
   const currentMonthStr = String(todayObj.getMonth() + 1).padStart(2, '0');
   
-  const targetStudents = userRole === '교사' ? visibleStudents : students;
+  const targetStudents = userRole === '교사' ? visibleStudents : activeStudents;
 
   const monthBirthdays = targetStudents.filter(s => {
     if (!s.birth) return false;
@@ -157,7 +177,7 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated && visibleStudents.length > 0 && currentTab === 'dashboard') {
-      const today = getKSTToday(); // ⭐ 한국 시간 적용
+      const today = getKSTToday();
       if (today.getDay() === 6) {
         if (!sessionStorage.getItem('prayerPopupShown')) {
           const studentsWithPrayer = visibleStudents.filter(s => s.prayer && s.prayer.trim() !== '');
@@ -189,18 +209,54 @@ export default function App() {
   const fetchAppData = async (churchId) => {
     const [
       { data: studentsData }, { data: teachersData }, { data: postsData }, 
-      { data: dutiesData }, { data: logsData }, { data: bannerData }
+      { data: dutiesData }, { data: logsData }, { data: bannerData }, { data: eventsData }
     ] = await Promise.all([
       supabase.from('students').select('*').eq('church_id', churchId).order('id', { ascending: true }),
       supabase.from('teachers').select('*').eq('church_id', churchId),
       supabase.from('posts').select('*').eq('church_id', churchId),
       supabase.from('duties').select('*').eq('church_id', churchId).order('duty_date', { ascending: true }), 
       supabase.from('visitation_logs').select('*'),
-      supabase.from('church_banners').select('*').eq('church_id', churchId).order('id', { ascending: false }) 
+      supabase.from('church_banners').select('*').eq('church_id', churchId).order('id', { ascending: false }),
+      supabase.from('events').select('created_at').eq('church_id', churchId).order('created_at', { ascending: false }).limit(1) // ⭐ 이벤트 갱신 확인용 데이터 추가
     ]);
 
-    if (studentsData) setStudents(studentsData.map(s => ({ ...s, group: s.class_name, parentsName: s.parents_name, parentsPhone: s.parents_phone, consecutiveAbsences: s.consecutive_absences, prayer: s.prayer_requests, prayedCount: s.prayed_count || 0, specialEvent: s.special_event || '' })));
-    if (postsData) setPosts(postsData.map(p => ({ ...p, type: p.post_type, hasFile: p.has_file, date: p.post_date })));
+    if (studentsData) {
+      setStudents(studentsData.map(s => ({ 
+        ...s, 
+        group: s.class_name, 
+        parentsName: s.parents_name, 
+        parentsPhone: s.parents_phone, 
+        consecutiveAbsences: s.consecutive_absences, 
+        prayer: s.prayer_requests, 
+        prayedCount: s.prayed_count || 0, 
+        specialEvent: s.special_event || '',
+        status: s.status || '재적',
+        excludeRequest: s.exclude_request || false
+      })));
+    }
+    
+    if (postsData) {
+      setPosts(postsData.map(p => ({ ...p, type: p.post_type, hasFile: p.has_file, date: p.post_date })));
+      
+      // ⭐ 커뮤니티(포스트) 새 글 등록 체크
+      if (postsData.length > 0) {
+        const lastCheckedCommunity = localStorage.getItem('last_checked_community') || '0';
+        const latestPostTime = Math.max(...postsData.map(p => new Date(p.created_at || p.post_date).getTime()));
+        if (latestPostTime > Number(lastCheckedCommunity)) {
+          setHasNewCommunity(true);
+        }
+      }
+    }
+    
+    // ⭐ 행사(이벤트) 새 글 등록 체크
+    if (eventsData && eventsData.length > 0) {
+      const lastCheckedEvent = localStorage.getItem('last_checked_event') || '0';
+      const latestEventTime = new Date(eventsData[0].created_at).getTime();
+      if (latestEventTime > Number(lastCheckedEvent)) {
+        setHasNewEvent(true);
+      }
+    }
+
     if (dutiesData) setDuties(dutiesData.map(d => ({ ...d, month: d.duty_month, date: d.duty_date })));
     if (logsData) setLogs(logsData.map(l => ({ ...l, studentId: l.student_id, date: l.visit_date, teacher: l.teacher_name })));
 
@@ -237,7 +293,7 @@ export default function App() {
 
     await fetchAttendanceByDate(selectedAttDate);
 
-    const today = getKSTToday(); // ⭐ 한국 시간 적용
+    const today = getKSTToday();
     const dayOfWeek = today.getDay(); 
     const lastSunday = getKSTToday();
     lastSunday.setDate(today.getDate() - dayOfWeek);
@@ -470,12 +526,32 @@ export default function App() {
     
     if (editStudentModal.isNew) {
       const { data, error } = await supabase.from('students').insert([studentData]).select().single();
-      if (!error && data) { setStudents([...students, { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests, prayedCount: 0, specialEvent: data.special_event || '' }]); showToast('신규 학생이 등록되었습니다.'); }
+      if (!error && data) { setStudents([...students, { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests, prayedCount: 0, specialEvent: data.special_event || '', status: data.status || '재적', excludeRequest: data.exclude_request || false }]); showToast('신규 학생이 등록되었습니다.'); }
     } else {
       const { data, error = null } = await supabase.from('students').update(studentData).eq('id', editStudentModal.student.id).select().single();
-      if (!error && data) { setStudents(students.map(s => s.id === data.id ? { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests, specialEvent: data.special_event || '' } : s)); showToast('학생 정보가 업데이트되었습니다.'); }
+      if (!error && data) { setStudents(students.map(s => s.id === data.id ? { ...data, group: data.class_name, parentsName: data.parents_name, parentsPhone: data.parents_phone, consecutiveAbsences: data.consecutive_absences, prayer: data.prayer_requests, specialEvent: data.special_event || '', status: data.status || '재적', excludeRequest: data.exclude_request || false } : s)); showToast('학생 정보가 업데이트되었습니다.'); }
     }
     closeEditStudent();
+  };
+
+  const handleRequestExcludeFromModal = async () => {
+    const isTeacher = userRole === '교사';
+    const msg = isTeacher 
+      ? "이 학생을 장기결석(재적제외) 처리하도록 요청하시겠습니까?\n(관리자 승인 후 제외됩니다)" 
+      : "이 학생을 즉시 재적 인원에서 제외하시겠습니까?";
+      
+    if(!window.confirm(msg)) return;
+    
+    const updateData = isTeacher ? { exclude_request: true } : { status: '재적제외', exclude_request: false };
+    const { error } = await supabase.from('students').update(updateData).eq('id', editStudentModal.student.id);
+    
+    if(!error) {
+      setStudents(students.map(s => s.id === editStudentModal.student.id ? {...s, ...updateData, excludeRequest: updateData.exclude_request || false} : s));
+      showToast(isTeacher ? "재적제외가 요청되었습니다." : "재적 제외 처리되었습니다.");
+      closeEditStudent();
+    } else {
+      showToast("처리 중 오류가 발생했습니다.", "error");
+    }
   };
 
   const saveQuickLog = async () => {
@@ -622,14 +698,17 @@ export default function App() {
 
         <div id="main-scroll-area" onScroll={handleMainScroll} className="flex-1 overflow-y-auto pb-20 scroll-smooth relative">
           
-          {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={students} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} logs={logs} setPostModal={setPostModal} banner={banner} monthBirthdays={monthBirthdays} eventStudents={eventStudents} openBannerModal={(type, data) => setBannerModal({ isOpen: true, type, data })} />}
+          {currentTab === 'dashboard' && <Dashboard userRole={userRole} currentUser={currentUser} students={visibleStudents} allStudents={activeStudents} attendance={attendance} sundayAttendance={sundayAttendance} sundayDate={sundayDate} teachers={teachers} duties={duties} posts={posts} setCurrentTab={setCurrentTab} setCommunityTab={setCommunityTab} showToast={showToast} openQuickLog={openQuickLog} navigateToProfile={navigateToProfile} logs={logs} setPostModal={setPostModal} banner={banner} monthBirthdays={monthBirthdays} eventStudents={eventStudents} openBannerModal={(type, data) => setBannerModal({ isOpen: true, type, data })} />}
           
           {currentTab === 'attendance' && <Attendance userRole={userRole} currentUser={currentUser} students={visibleStudents} attendance={attendance} teachers={teachers} uniqueGroups={visibleGroups} handleAttendance={handleAttendance} handleAllPresent={handleAllPresent} showToast={showToast} selectedAttDate={selectedAttDate} setSelectedAttDate={setSelectedAttDate} fetchAttendanceByDate={fetchAttendanceByDate} />}
-          {currentTab === 'students' && <StudentList userRole={userRole} currentUser={currentUser} students={visibleStudents} studentSearch={studentSearch} setStudentSearch={setStudentSearch} openEditStudent={openEditStudent} navigateToProfile={navigateToProfile} logs={logs} />}
+          
+          {currentTab === 'students' && <StudentList userRole={userRole} currentUser={currentUser} students={listStudents} setStudents={setStudents} studentSearch={studentSearch} setStudentSearch={setStudentSearch} openEditStudent={openEditStudent} navigateToProfile={navigateToProfile} logs={logs} />}
+          
           {currentTab === 'community' && <Community userRole={userRole} currentUser={currentUser} posts={posts} setPosts={setPosts} duties={duties} setDuties={setDuties} communityTab={communityTab} setCommunityTab={setCommunityTab} showToast={showToast} setPostModal={setPostModal} students={visibleStudents} setStudents={setStudents} />}
           {currentTab === 'profile' && <Profile selectedStudent={selectedStudent} logs={logs} setLogs={setLogs} setCurrentTab={setCurrentTab} openEditStudent={openEditStudent} showToast={showToast} openQuickLog={openQuickLog} />}
-          {currentTab === 'admin' && <AdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} students={students} setStudents={setStudents} teachers={teachers} setTeachers={setTeachers} pendingTeachers={pendingTeachers} setPendingTeachers={setPendingTeachers} uniqueGroups={uniqueGroups} showToast={showToast} banner={banner} setBanner={setBanner} />}
+          {currentTab === 'admin' && <AdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} students={activeStudents} setStudents={setStudents} teachers={teachers} setTeachers={setTeachers} pendingTeachers={pendingTeachers} setPendingTeachers={setPendingTeachers} uniqueGroups={uniqueGroups} showToast={showToast} banner={banner} setBanner={setBanner} />}
           {currentTab === 'superadmin' && <SuperAdminCenter currentUser={currentUser} setCurrentUser={setCurrentUser} showToast={showToast} setCurrentTab={setCurrentTab} />}
+          {currentTab === 'events' && <EventCenter userRole={userRole} currentUser={currentUser} students={activeStudents} showToast={showToast} />}
           
           <div className="mt-8 pb-6 text-center">
             <p className="text-[10px] text-stone-400 font-medium tracking-tight">Copyright ⓒ 2026 NGM. All right reserved.</p>
@@ -796,10 +875,19 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="p-4 border-t border-stone-100 bg-stone-50 flex space-x-2 shrink-0 rounded-b-2xl">
-                <button onClick={saveStudentInfo} className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 transition-colors text-white text-sm font-bold rounded-xl shadow-sm">
-                  저장하기
-                </button>
+              <div className="p-4 border-t border-stone-100 bg-stone-50 flex justify-between items-center shrink-0 rounded-b-2xl">
+                {editStudentModal.student.status !== '재적제외' && !editStudentModal.isNew && !editStudentModal.student.excludeRequest ? (
+                  <button onClick={handleRequestExcludeFromModal} className="text-[10px] text-stone-400 font-bold underline hover:text-rose-500 transition-colors px-2">
+                    {userRole === '교사' ? '재적제외 요청' : '재적에서 제외'}
+                  </button>
+                ) : (
+                  <div className="w-[80px]"></div>
+                )}
+                <div className="flex-1 flex justify-end">
+                  <button onClick={saveStudentInfo} className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 transition-colors text-white text-sm font-bold rounded-xl shadow-sm">
+                    저장하기
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -900,7 +988,14 @@ export default function App() {
           showToast={showToast} 
         />
 
-        <BottomNav currentTab={currentTab} setCurrentTab={setCurrentTab} userRole={userRole} />
+        {/* ⭐ 하단 네비게이션에 뱃지 상태 넘겨주기 */}
+        <BottomNav 
+          currentTab={currentTab} 
+          setCurrentTab={setCurrentTab} 
+          userRole={userRole} 
+          hasNewCommunity={hasNewCommunity}
+          hasNewEvent={hasNewEvent}
+        />
       </div>
     </div>
   );

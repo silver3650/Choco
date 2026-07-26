@@ -7,7 +7,6 @@ export default function AdminCenter({
   pendingTeachers, setPendingTeachers, uniqueGroups, showToast,
   banner, setBanner 
 }) {
-  // ⭐ [신규] 무조건 한국 시간(KST)을 반환하는 함수 적용
   const getKSTToday = () => {
     const curr = new Date();
     const utc = curr.getTime() + (curr.getTimezoneOffset() * 60 * 1000);
@@ -40,7 +39,7 @@ export default function AdminCenter({
   const [bannerForm, setUpdateBannerForm] = useState({
     title: banner?.title || '',
     content: banner?.content || '',
-    start_date: banner?.start_date || getLocalYYYYMMDD(), // KST 적용
+    start_date: banner?.start_date || getLocalYYYYMMDD(), 
     end_date: banner?.end_date || (() => { const d = getKSTToday(); d.setDate(d.getDate() + 7); return getLocalYYYYMMDD(d); })(),
     bg_color: banner?.bg_color || 'emerald'
   });
@@ -99,7 +98,7 @@ export default function AdminCenter({
   const getWeekOfMonth = (date) => Math.floor((date.getDate() - 1) / 7) + 1;
 
   const statsData = (() => {
-    const today = getKSTToday(); // ⭐ KST 적용
+    const today = getKSTToday(); 
     
     if (statPeriod === 'monthly') {
       let monthStats = [];
@@ -179,9 +178,33 @@ export default function AdminCenter({
     if (error) { showToast("반 배정 업데이트에 실패했습니다.", "error"); return; }
     if (!data || data.length === 0) { alert("RLS 보안 규칙에 의해 업데이트가 차단되었습니다."); return; }
 
-    setStudents(students.map(s => selectedStudentIds.includes(s.id) ? { ...s, group: batchGroup } : s));
+    // 부모 컴포넌트(App.jsx)의 상태 업데이트
+    setStudents(prev => prev.map(s => selectedStudentIds.includes(s.id) ? { ...s, group: batchGroup, class_name: batchGroup } : s));
     setSelectedStudentIds([]);
     showToast(`선택된 ${selectedStudentIds.length}명의 학생이 ${batchGroup}(으)로 이동되었습니다.`);
+  };
+
+  // ⭐ [신규] 학생 일괄 재적제외 처리 로직 추가
+  const handleBatchExclude = async () => {
+    if(selectedStudentIds.length === 0) { showToast("학생을 먼저 선택해주세요.", "error"); return; }
+    
+    if(!window.confirm(`선택한 ${selectedStudentIds.length}명의 학생을 모두 '재적제외' 처리하시겠습니까?\n(제외된 학생은 '학생 관리 > 재적 제외' 탭에서 언제든 복구할 수 있습니다.)`)) {
+      return;
+    }
+    
+    // DB 업데이트: status 변경 및 exclude_request 초기화
+    const { data, error } = await supabase.from('students')
+      .update({ status: '재적제외', exclude_request: false })
+      .in('id', selectedStudentIds)
+      .select();
+      
+    if (error) { showToast("재적제외 처리에 실패했습니다.", "error"); return; }
+    if (!data || data.length === 0) { alert("RLS 보안 규칙에 의해 업데이트가 차단되었습니다."); return; }
+
+    // 부모 컴포넌트(App.jsx)의 상태 업데이트 (App.jsx에서 알아서 필터링됨)
+    setStudents(prev => prev.map(s => selectedStudentIds.includes(s.id) ? { ...s, status: '재적제외', excludeRequest: false } : s));
+    setSelectedStudentIds([]);
+    showToast(`선택된 ${selectedStudentIds.length}명의 학생이 일괄 재적제외 처리되었습니다.`);
   };
 
   const handleAddGroup = async () => {
@@ -485,7 +508,18 @@ export default function AdminCenter({
              </div>
              
              {selectedStudentIds.length > 0 && (
-               <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 mb-3 flex items-center justify-between"><span className="text-xs font-bold text-emerald-700">{selectedStudentIds.length}명 선택됨</span><div className="flex space-x-2"><select value={batchGroup} onChange={(e) => setBatchGroup(e.target.value)} className="text-xs font-bold border rounded-md py-1 px-2">{sortedGroups.filter(g => g !== '전체').map(g => <option key={g} value={g}>{g}</option>)}</select><button onClick={handleBatchGroupChange} className="bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-md">이동</button></div></div>
+               <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 mb-3 flex items-center justify-between">
+                 <span className="text-xs font-bold text-emerald-700">{selectedStudentIds.length}명 선택됨</span>
+                 <div className="flex space-x-2">
+                   <select value={batchGroup} onChange={(e) => setBatchGroup(e.target.value)} className="text-xs font-bold border rounded-md py-1 px-2">
+                     {sortedGroups.filter(g => g !== '전체').map(g => <option key={g} value={g}>{g}</option>)}
+                   </select>
+                   <button onClick={handleBatchGroupChange} className="bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-md">이동</button>
+                   
+                   {/* ⭐ [신규] 일괄 제외 버튼 추가 */}
+                   <button onClick={handleBatchExclude} className="bg-rose-500 text-white text-xs font-bold px-3 py-1 rounded-md">일괄 제외</button>
+                 </div>
+               </div>
              )}
              
              <div className="border border-stone-100 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
@@ -545,7 +579,7 @@ export default function AdminCenter({
       )}
 
       {editingTeacher && (
-        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center p-4 border-b border-stone-100"><h3 className="font-bold text-stone-800 flex items-center text-sm"><UserCog size={18} className="mr-2 text-emerald-500" /> 교사 상세 프로필 설정</h3><button onClick={() => setEditingTeacher(null)} className="text-stone-400"><X size={16} /></button></div>
             <div className="p-5 space-y-4">

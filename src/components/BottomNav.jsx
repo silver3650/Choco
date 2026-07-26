@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, CheckSquare, Users, MessageCircle, Settings } from 'lucide-react';
+import { Home, CheckSquare, Users, MessageCircle, Calendar, Settings } from 'lucide-react';
 
-export default function BottomNav({ currentTab, setCurrentTab, userRole }) {
+export default function BottomNav({ currentTab, setCurrentTab, userRole, hasNewCommunity, hasNewEvent }) {
   return (
     <nav className="fixed bottom-0 w-full max-w-md bg-white border-t border-stone-200 flex justify-around items-center h-15 pb-safe z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.03)]">
       <button onClick={() => setCurrentTab('dashboard')} className={`flex flex-col items-center justify-center w-full h-full transition-colors duration-200 ${currentTab === 'dashboard' ? 'text-emerald-500' : 'text-stone-400 hover:text-stone-600'}`}>
@@ -16,10 +16,33 @@ export default function BottomNav({ currentTab, setCurrentTab, userRole }) {
         <Users size={22} className={currentTab === 'students' || currentTab === 'profile' ? 'fill-current' : ''} />
         <span className="text-[10px] mt-1 font-bold">학생관리</span>
       </button>
-      <button onClick={() => setCurrentTab('community')} className={`flex flex-col items-center justify-center w-full h-full transition-colors duration-200 ${currentTab === 'community' ? 'text-emerald-500' : 'text-stone-400 hover:text-stone-600'}`}>
-        <MessageCircle size={22} className={currentTab === 'community' ? 'fill-current' : ''} />
+      
+      {/* ⭐ 커뮤니티 탭 (NEW 뱃지 포함) */}
+      <button onClick={() => setCurrentTab('community')} className={`flex flex-col items-center justify-center w-full h-full transition-colors duration-200 relative ${currentTab === 'community' ? 'text-emerald-500' : 'text-stone-400 hover:text-stone-600'}`}>
+        <div className="relative">
+          <MessageCircle size={22} className={currentTab === 'community' ? 'fill-current' : ''} />
+          {hasNewCommunity && currentTab !== 'community' && (
+            <span className="absolute -top-1 -right-2 bg-rose-500 text-white text-[8px] font-extrabold px-1 rounded-full animate-pulse shadow-sm">
+              NEW
+            </span>
+          )}
+        </div>
         <span className="text-[10px] mt-1 font-bold">커뮤니티</span>
       </button>
+
+      {/* ⭐ 행사/설문 탭 (NEW 뱃지 포함) */}
+      <button onClick={() => setCurrentTab('events')} className={`flex flex-col items-center justify-center w-full h-full transition-colors duration-200 relative ${currentTab === 'events' ? 'text-emerald-500' : 'text-stone-400 hover:text-stone-600'}`}>
+        <div className="relative">
+          <Calendar size={22} className={currentTab === 'events' ? 'fill-current' : ''} />
+          {hasNewEvent && currentTab !== 'events' && (
+            <span className="absolute -top-1 -right-2 bg-rose-500 text-white text-[8px] font-extrabold px-1 rounded-full animate-pulse shadow-sm">
+              NEW
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] mt-1 font-bold">행사/설문</span>
+      </button>
+
       {userRole !== '교사' && (
         <button onClick={() => setCurrentTab('admin')} className={`flex flex-col items-center justify-center w-full h-full transition-colors duration-200 ${currentTab === 'admin' ? 'text-emerald-500' : 'text-stone-400 hover:text-stone-600'}`}>
           <Settings size={22} className={currentTab === 'admin' ? 'fill-current' : ''} />
