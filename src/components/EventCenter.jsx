@@ -411,7 +411,7 @@ export default function EventCenter({ userRole, currentUser, students, showToast
                     <select 
                       value={teacherForm[student.id] || '미정'}
                       onChange={(e) => setTeacherForm({...teacherForm, [student.id]: e.target.value})}
-                      className="bg-stone-50 border border-stone-200 text-stone-700 text-xs font-bold rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-400 shadow-sm min-w-[120px]"
+                      className="bg-stone-50 border border-stone-200 text-stone-700 text-xs font-bold rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-400 shadow-sm min-w-30"
                     >
                       <option value="미정">미정 (선택안함)</option>
                       {selectedEvent.options.map((opt, idx) => (
@@ -440,7 +440,7 @@ export default function EventCenter({ userRole, currentUser, students, showToast
 
       {/* 행사 생성 및 수정 모달 (관리자용) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-3xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
             <div className="flex justify-between items-center p-4 border-b border-stone-100 bg-stone-50">
               <h3 className="font-bold text-stone-800">{isEditMode ? '행사 수정하기' : '새 행사 만들기'}</h3>
