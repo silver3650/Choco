@@ -648,7 +648,7 @@ export default function App() {
     return (
       <>
         {toast.isOpen && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-99999 bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">
             {toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-rose-400" /> : <CheckCircle2 size={18} className="mr-2 text-emerald-400" />}
             <span className="text-sm font-bold">{toast.message}</span>
           </div>
@@ -659,10 +659,10 @@ export default function App() {
   }
 
   return (
-    <div className="h-[100dvh] bg-stone-100 font-sans flex justify-center overflow-hidden">
+    <div className="h-dvh bg-stone-100 font-sans flex justify-center overflow-hidden">
       <div className="w-full max-w-md bg-stone-50 h-full relative shadow-2xl flex flex-col overflow-hidden">
         
-        <header className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-4 sticky top-0 z-10 shadow-md shrink-0">
+        <header className="bg-linear-to-r from-emerald-500 to-teal-500 text-white p-4 sticky top-0 z-10 shadow-md shrink-0">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-3">
               {currentUser?.logo ? <img src={currentUser.logo} alt="logo" className="w-9 h-9 rounded-full bg-white object-cover border-2 border-emerald-200" /> : <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center border-2 border-white/40"><Church size={16} className="text-white drop-shadow-sm" /></div>}
@@ -716,7 +716,7 @@ export default function App() {
         </div>
 
         {myProfileModal.isOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white"><h3 className="font-bold text-stone-800 flex items-center text-sm"><UserCircle size={18} className="mr-2 text-emerald-500" /> 내 프로필 설정</h3><button onClick={closeMyProfile} className="text-stone-400 hover:text-stone-600 bg-stone-100 rounded-full p-1 transition-colors"><X size={16} /></button></div>
               <div className="p-5 space-y-4">
@@ -742,7 +742,7 @@ export default function App() {
         )}
 
         {quickLogModal.isOpen && quickLogModal.student && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="flex justify-between items-center p-4 border-b border-stone-100">
                 <h3 className="font-bold text-stone-800 flex items-center">
@@ -783,7 +783,7 @@ export default function App() {
         )}
         
         {postModal.isOpen && postModal.post && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white">
                 <span className={`text-[10px] font-bold px-2 py-1 rounded bg-emerald-100 text-emerald-600`}>{postModal.post.category || postModal.post.type === 'notice' ? '공지사항' : '자료실'}</span>
@@ -807,7 +807,7 @@ export default function App() {
         )}
         
         {editStudentModal.isOpen && editStudentModal.student && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+          <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
               <div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white shrink-0">
                 <h3 className="font-bold text-stone-800 flex items-center text-lg">
@@ -881,7 +881,7 @@ export default function App() {
                     {userRole === '교사' ? '재적제외 요청' : '재적에서 제외'}
                   </button>
                 ) : (
-                  <div className="w-[80px]"></div>
+                  <div className="w-20"></div>
                 )}
                 <div className="flex-1 flex justify-end">
                   <button onClick={saveStudentInfo} className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 transition-colors text-white text-sm font-bold rounded-xl shadow-sm">
@@ -893,10 +893,10 @@ export default function App() {
           </div>
         )}
         
-        {editDutyModal.isOpen && editDutyModal.duty && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"><div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white"><h3 className="font-bold text-stone-800 flex items-center text-sm"><Calendar size={18} className="mr-2 text-emerald-500" /> {editDutyModal.duty.date} 순서 변경</h3><button onClick={closeEditDuty} className="text-stone-400"><X size={16} /></button></div><div className="p-5 space-y-4"><div><label className="text-[11px] font-bold text-stone-500 mb-1">기도회 인도</label><select value={editDutyModal.duty.leader} onChange={(e) => setEditDutyModal(p => ({ isOpen: true, duty: { ...p.duty, leader: e.target.value } }))} className="w-full bg-stone-50 border border-stone-200 rounded-lg py-2.5 px-3 text-sm">{teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}</select></div></div><div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-end space-x-2"><button onClick={closeEditDuty} className="px-4 py-2 bg-white border border-stone-200 text-stone-600 text-xs font-bold rounded-lg">취소</button><button onClick={saveEditDuty} className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-lg">저장</button></div></div></div>)}
+        {editDutyModal.isOpen && editDutyModal.duty && (<div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4"><div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"><div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white"><h3 className="font-bold text-stone-800 flex items-center text-sm"><Calendar size={18} className="mr-2 text-emerald-500" /> {editDutyModal.duty.date} 순서 변경</h3><button onClick={closeEditDuty} className="text-stone-400"><X size={16} /></button></div><div className="p-5 space-y-4"><div><label className="text-[11px] font-bold text-stone-500 mb-1">기도회 인도</label><select value={editDutyModal.duty.leader} onChange={(e) => setEditDutyModal(p => ({ isOpen: true, duty: { ...p.duty, leader: e.target.value } }))} className="w-full bg-stone-50 border border-stone-200 rounded-lg py-2.5 px-3 text-sm">{teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}</select></div></div><div className="p-4 border-t border-stone-100 bg-[#FFFCF9] flex justify-end space-x-2"><button onClick={closeEditDuty} className="px-4 py-2 bg-white border border-stone-200 text-stone-600 text-xs font-bold rounded-lg">취소</button><button onClick={saveEditDuty} className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-lg">저장</button></div></div></div>)}
 
         {bannerModal.isOpen && (
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4">
+          <div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="flex justify-between items-center p-4 border-b border-stone-100 bg-white">
                 <span className={`text-[10px] font-bold px-2 py-1 rounded ${bannerModal.type === 'promo' ? 'bg-emerald-100 text-emerald-600' : 'bg-purple-100 text-purple-600'}`}>
@@ -944,11 +944,11 @@ export default function App() {
           </div>
         )}
 
-        {confirmDialog.isOpen && (<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-xs text-center animate-in zoom-in-95 duration-200"><AlertCircle size={40} className="mx-auto text-emerald-500 mb-4" /><p className="text-stone-800 font-bold mb-6">{confirmDialog.message}</p><div className="flex space-x-3"><button onClick={closeConfirm} className="flex-1 bg-stone-100 py-3 rounded-xl font-bold">취소</button><button onClick={executeConfirm} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold">확인</button></div></div></div>)}
-        {toast.isOpen && (<div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">{toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-rose-400" /> : <CheckCircle2 size={18} className="mr-2 text-emerald-400" />}<span className="text-sm font-bold">{toast.message}</span></div>)}
+        {confirmDialog.isOpen && (<div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-xs text-center animate-in zoom-in-95 duration-200"><AlertCircle size={40} className="mx-auto text-emerald-500 mb-4" /><p className="text-stone-800 font-bold mb-6">{confirmDialog.message}</p><div className="flex space-x-3"><button onClick={closeConfirm} className="flex-1 bg-stone-100 py-3 rounded-xl font-bold">취소</button><button onClick={executeConfirm} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold">확인</button></div></div></div>)}
+        {toast.isOpen && (<div className="fixed top-4 left-1/2 -translate-x-1/2 z-99999 bg-stone-800/95 text-white px-5 py-3 rounded-full shadow-lg flex items-center animate-in slide-in-from-top-5 fade-in duration-300 min-w-50 justify-center">{toast.type === 'error' ? <AlertCircle size={18} className="mr-2 text-rose-400" /> : <CheckCircle2 size={18} className="mr-2 text-emerald-400" />}<span className="text-sm font-bold">{toast.message}</span></div>)}
 
         {prayerPopup.isOpen && prayerPopup.student && (
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4">
+          <div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/60 p-4">
             <div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm text-center animate-in zoom-in-95 duration-300">
               <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl">🙏</span>
@@ -974,7 +974,7 @@ export default function App() {
         {showScrollTop && (
           <button 
             onClick={scrollToTop} 
-            className="fixed bottom-[85px] right-5 z-[999] bg-indigo-500 text-white w-12 h-12 rounded-full shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] border border-indigo-400 flex items-center justify-center animate-in zoom-in-90 fade-in duration-200 hover:bg-indigo-600 hover:scale-105 hover:shadow-xl transition-all"
+            className="fixed bottom-21.25 right-5 z-999 bg-indigo-500 text-white w-12 h-12 rounded-full shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] border border-indigo-400 flex items-center justify-center animate-in zoom-in-90 fade-in duration-200 hover:bg-indigo-600 hover:scale-105 hover:shadow-xl transition-all"
             title="맨 위로"
           >
             <ChevronUp size={24} strokeWidth={2.5} />

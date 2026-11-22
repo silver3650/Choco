@@ -1,11 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronRight, CalendarCheck, Users, Clock, AlertCircle, Phone, MessageCircle, FileText, BarChart2, BookOpen } from 'lucide-react';
-import { supabase } from '../supabase';
 
-export default function Dashboard({ 
-  userRole, currentUser, students, allStudents, attendance, sundayAttendance, sundayDate, 
-  teachers, duties, posts, setCurrentTab, setCommunityTab, showToast, openQuickLog, navigateToProfile, setPostModal,
-  banner, monthBirthdays, eventStudents, openBannerModal 
+// [로컬 프로젝트 적용 시] 아래 주석을 해제하고, 그 아래의 미리보기용 Mock 블록을 삭제하세요.
+// import { supabase } from '../supabase';
+
+export default function Dashboard({
+  userRole = '담당목사',
+  currentUser = { name: '차창현' },
+  students = PREVIEW_STUDENTS,
+  allStudents = PREVIEW_STUDENTS,
+  attendance = {},
+  sundayAttendance = PREVIEW_SUNDAY_ATTENDANCE,
+  sundayDate = '2026-11-22',
+  teachers = [],
+  duties = [],
+  posts = [],
+  setCurrentTab = () => {},
+  setCommunityTab = () => {},
+  showToast = () => {},
+  openQuickLog = () => {},
+  navigateToProfile = () => {},
+  setPostModal = () => {},
+  banner = null,
+  monthBirthdays = [],
+  eventStudents = [],
+  openBannerModal = () => {},
 }) {
   // ⭐ [신규] 무조건 한국 시간(KST)을 반환하는 함수
   const getKSTToday = () => {
@@ -49,19 +68,72 @@ export default function Dashboard({
   const absentStudents = students.filter(s => sundayAttendance && sundayAttendance[s.id] === '결석');
   const consecutiveAbsentees = students.filter(s => s.consecutiveAbsences >= 3);
 
+  // ⭐ [수정] 기간 필터링 + 페이지네이션을 적용하여 Supabase 1,000행 제한으로 인한 최신 출석 누락 방지
   useEffect(() => {
     const fetchDashboardHistory = async () => {
       if (!students || students.length === 0) return;
+      if (statPeriod === 'custom' && (!customStart || !customEnd)) return;
+
       const studentIds = students.map(s => s.id);
-      const { data, error } = await supabase.from('attendance')
-        .select('attendance_date, status, student_id')
-        .in('student_id', studentIds);
-      if (!error && data) {
-        setLocalAttHistory(data);
+      let startDateStr = '';
+      let endDateStr = '';
+
+      // 선택된 탭(주별/월별/기간지정)에 맞춰 필요한 기간만 정확히 계산
+      if (statPeriod === 'weekly') {
+        const current = getKSTToday();
+        if (current.getDay() !== 0) current.setDate(current.getDate() - current.getDay());
+        const start = new Date(current);
+        start.setDate(current.getDate() - (4 * 7));
+        startDateStr = getLocalYYYYMMDD(start);
+        endDateStr = getLocalYYYYMMDD(current);
+      } else if (statPeriod === 'monthly') {
+        const now = getKSTToday();
+        const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        startDateStr = getLocalYYYYMMDD(start);
+        endDateStr = getLocalYYYYMMDD(end);
+      } else if (statPeriod === 'custom') {
+        startDateStr = customStart;
+        endDateStr = customEnd;
+      }
+
+      const pageSize = 1000;
+      let allRows = [];
+      let from = 0;
+
+      try {
+        while (true) {
+          let query = supabase
+            .from('attendance')
+            .select('attendance_date, status, student_id')
+            .in('student_id', studentIds)
+            .order('attendance_date', { ascending: false })
+            .order('student_id', { ascending: true })
+            .range(from, from + pageSize - 1);
+
+          if (startDateStr) query = query.gte('attendance_date', startDateStr);
+          if (endDateStr) query = query.lte('attendance_date', endDateStr);
+
+          const { data, error } = await query;
+          if (error) {
+            console.error('출석 추이 데이터 조회 오류:', error);
+            break;
+          }
+          if (!data || data.length === 0) break;
+
+          allRows = allRows.concat(data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
+
+        setLocalAttHistory(allRows);
+      } catch (err) {
+        console.error('출석 추이 조회 중 예외 발생:', err);
       }
     };
+
     fetchDashboardHistory();
-  }, [students]);
+  }, [students, statPeriod, customStart, customEnd, sundayAttendance]);
 
   const isNewPost = (dateStr) => {
     if (!dateStr) return false;
@@ -151,7 +223,11 @@ export default function Dashboard({
         const distinctDates = [...new Set(recordsInMonth.map(r => r.attendance_date))];
         let totalPresentCount = 0;
         distinctDates.forEach(date => {
-           totalPresentCount += recordsInMonth.filter(r => r.attendance_date === date && r.status?.trim() === '출석').length;
+           const statusByStudent = {};
+           recordsInMonth
+             .filter(r => r.attendance_date === date)
+             .forEach(r => { statusByStudent[String(r.student_id)] = r.status?.trim(); });
+           totalPresentCount += Object.values(statusByStudent).filter(st => st === '출석').length;
         });
         
         const avgPresent = distinctDates.length > 0 ? Math.round(totalPresentCount / distinctDates.length) : 0;
@@ -183,7 +259,12 @@ export default function Dashboard({
       const weekNum = getWeekOfMonth(dateObj);
       
       const records = relevantAttHistory.filter(r => r.attendance_date && r.attendance_date.substring(0, 10) === dateStr);
-      const present = records.filter(r => r.status?.trim() === '출석').length;
+      // 상단 예배 출석 현황(App.jsx)과 동일하게 학생 ID별 최신 상태 기준으로 1명씩 집계
+      const statusByStudent = {};
+      records.forEach(r => {
+        statusByStudent[String(r.student_id)] = r.status?.trim();
+      });
+      const present = Object.values(statusByStudent).filter(st => st === '출석').length;
       
       return {
           label: `${month}월${weekNum}주`,

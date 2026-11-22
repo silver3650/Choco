@@ -579,7 +579,7 @@ export default function AdminCenter({
       )}
 
       {editingTeacher && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center p-4 border-b border-stone-100"><h3 className="font-bold text-stone-800 flex items-center text-sm"><UserCog size={18} className="mr-2 text-emerald-500" /> 교사 상세 프로필 설정</h3><button onClick={() => setEditingTeacher(null)} className="text-stone-400"><X size={16} /></button></div>
             <div className="p-5 space-y-4">
