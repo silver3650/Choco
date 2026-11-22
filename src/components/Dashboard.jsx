@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronRight, CalendarCheck, Users, Clock, AlertCircle, Phone, MessageCircle, FileText, BarChart2, BookOpen } from 'lucide-react';
-
-// [로컬 프로젝트 적용 시] 아래 주석을 해제하고, 그 아래의 미리보기용 Mock 블록을 삭제하세요.
 import { supabase } from '../supabase';
 
 export default function Dashboard({
